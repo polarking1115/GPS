@@ -2,6 +2,25 @@
 
 여러 축제에 재사용하는 모바일 웹 앱과 부스·운영본부 관리 화면입니다. 기존 클릭형 시안과 달리 Python API와 SQLite에 실제 데이터를 저장합니다. 현재는 로컬 개발·검토용 구현이며, 행사 배포·1만 명 규모 검증 완료 상태가 아닙니다.
 
+## 다른 컴퓨터에서 이어서 작업
+
+```bash
+git clone https://github.com/polarking1115/GPS.git
+cd GPS
+git switch main
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python server.py
+```
+
+Windows에서는 `python3` 대신 `py -3.12`, `.venv/bin/python` 대신 `.venv\Scripts\python.exe`를 사용하세요. 비공개 저장소인 경우 해당 GitHub 계정으로 인증해야 합니다.
+
+실행 후 브라우저에서 `http://127.0.0.1:8000`을 열고, `/manage`에서 새 개발 환경의 첫 관리자 계정을 생성합니다.
+
+**GitHub에는 코드·문서·디자인만 포함됩니다.** 기존 `.data/` 개발 DB·암호키·계정·환경 변수는 포함되지 않습니다. 새 컴퓨터에서는 샘플 데이터로 시작합니다. 기존 개발 데이터까지 옮길 필요가 있다면 비공개 백업의 DB와 encryption.key를 함께 안전한 경로로 옮겨야 하며 Git에 추가하면 안 됩니다.
+
+이어서 할 일은 [작업 재개 메모](docs/RESUME.md), 구현 범위는 [구현 현황](docs/implementation-status.md), 외부 서비스 후보는 [연동 검토](docs/integration-options.md)를 확인하세요.
+
 ## 실행
 
 Python 3.12 이상에서:
