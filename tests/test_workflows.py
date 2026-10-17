@@ -156,4 +156,19 @@ class Workflows(unittest.TestCase):
         clone=self.admin.ok('/api/events','POST',{'name':'Clone','copy':self.event})['id']
         a=self.admin.ok(self.e('admin',clone));self.assertEqual(a['stats']['participants'],0);self.assertEqual(a['stats']['responses'],0);self.assertEqual(a['stats']['entries'],0);self.assertGreater(len(a['booths']),0);self.assertTrue(all(not b['approved'] and b['status']=='closed' for b in a['booths']))
 
+    def test_11_geo_settings_roundtrip_and_validation(self):
+        maps=[{'name':'센터','image':'/assets/youth-hero.png','geofence':{'enabled':True,'entrance':[34.75,127.75],'bounds':[[34.74,127.74],[34.76,127.76]],'dwell_ms':3000}}]
+        config={'center':[34.75,127.75],'zoom':17,'basemap':'satellite','overlay':{'image':'/assets/youth-hero.png','bounds':[[34.74,127.74],[34.76,127.76]],'opacity':.5,'rotation':30}}
+        self.admin.ok(self.e('settings'),'POST',{'maps':maps,'outdoor_map':config})
+        public=Client().ok('/api/events/youth-expo')
+        self.assertEqual(public['theme']['outdoor_map'],config)
+        self.assertEqual(public['theme']['building_maps'][0]['geofence']['exit_buffer'],40)
+        self.assertEqual(self.admin.call(self.e('settings'),'POST',{'outdoor_map':{'center':[True,127]}})[0],400)
+        self.assertEqual(Client().ok('/api/events/youth-expo')['theme']['outdoor_map'],config)
+        invalid={'nodes':[{'id':'a','name':'A','lat':34,'lng':127}],'edges':[{'from':'a','to':'missing'}]}
+        self.assertEqual(self.admin.call(self.e('settings'),'POST',{'outdoor':invalid})[0],400)
+        self.admin.ok(self.e('booth'),'POST',{'id':'booth-1','lat':34.75,'lng':127.75,'building':''})
+        self.assertEqual(next(b for b in Client().ok('/api/events/youth-expo')['booths'] if b['id']=='booth-1')['lat'],34.75)
+        self.assertEqual(self.admin.call(self.e('booth'),'POST',{'id':'booth-1','lat':None,'lng':127.75})[0],400)
+
 if __name__=='__main__': unittest.main(verbosity=2)

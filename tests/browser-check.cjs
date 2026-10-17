@@ -1,8 +1,10 @@
 // Requires Playwright and Chromium. Run against a fresh disposable server, never a live event.
 const {chromium}=require('playwright');const assert=require('node:assert/strict');
+const path=require('node:path'),fs=require('node:fs'),os=require('node:os');
+const screenshotDir=process.env.BROWSER_SCREENSHOT_DIR||fs.mkdtempSync(path.join(os.tmpdir(),'festival-browser-screens-'));fs.mkdirSync(screenshotDir,{recursive:true});
 const base=process.env.BROWSER_TEST_URL||'http://127.0.0.1:8001';
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||(fs.existsSync('/usr/bin/chromium')?'/usr/bin/chromium':undefined),headless:true,args:['--no-sandbox']});
  const errors=[];const admin=await browser.newPage({viewport:{width:1440,height:1000}});admin.on('pageerror',e=>errors.push(e.message));admin.on('dialog',d=>d.accept());
  await admin.goto(base+'/manage');await admin.getByLabel('이메일',{exact:true}).fill('browser-owner@example.test');await admin.getByLabel('담당자 표시명').fill('Browser operator');await admin.getByLabel('비밀번호 · 12자 이상').fill('browser-only-password-2026');await admin.getByRole('button',{name:'관리자 생성',exact:true}).click();await admin.getByRole('heading',{name:'현장 운영 현황'}).waitFor();
  const token=await admin.evaluate(()=>sessionStorage.getItem('festival_management_token'));
@@ -11,6 +13,7 @@ const base=process.env.BROWSER_TEST_URL||'http://127.0.0.1:8001';
  const access=await auth('booth-access',{booth:'booth-1',password:'browser-shared-password'});
  const staff=await browser.newPage({viewport:{width:430,height:960}});staff.on('pageerror',e=>errors.push(e.message));staff.on('dialog',d=>d.accept());await staff.goto(base+'/bm/'+access.manager);await staff.getByLabel('공통 비밀번호',{exact:true}).fill('browser-shared-password');await staff.getByLabel('이번 접속 담당자 표시명').fill('교대 A');await staff.getByRole('button',{name:'부스 관리 시작'}).click();await staff.getByLabel('운영 상태 · 모든 담당자에게 공유되는 항목').count().catch(()=>{});
  await staff.locator('#staff-status').waitFor();
+ await staff.getByRole('button',{name:'인증 QR 출력',exact:true}).click();await staff.locator('img.qr-image').waitFor();await staff.waitForFunction(()=>document.querySelector('img.qr-image')?.naturalWidth>0);await staff.getByRole('button',{name:'닫기',exact:true}).click();
  const participant=await browser.newPage({viewport:{width:390,height:900}});participant.on('pageerror',e=>errors.push(e.message));participant.on('dialog',d=>d.accept());await participant.goto(base+'/b/'+access.qr);await participant.getByRole('button',{name:'평가 없이 인증',exact:true}).click();await participant.getByRole('button',{name:'확인하고 계속'}).click();await participant.getByRole('button',{name:'평가 없이 인증',exact:true}).click();await participant.getByRole('heading',{name:'참여 인증 완료'}).waitFor();
  await staff.locator('#staff-status').selectOption('paused');await participant.goto(base+'/b/'+access.qr);await participant.getByText('현재 인증할 수 없습니다.',{exact:false}).waitFor();await staff.locator('#staff-status').selectOption('open');
  await auth('settings',{survey_gate:'all',entry_gate:'all',entry_end:'2099-12-31'});
@@ -20,6 +23,6 @@ const base=process.env.BROWSER_TEST_URL||'http://127.0.0.1:8001';
  await admin.getByRole('button',{name:'소통·대응',exact:true}).click();await admin.getByText('브라우저 테스트 문의',{exact:true}).waitFor();
  await admin.getByRole('button',{name:'미션·설문',exact:true}).click();await admin.getByRole('button',{name:'설문 편집·표준양식'}).click();await admin.locator('[name=template][value=economy]').check();await admin.getByRole('button',{name:'선택 표준 문항 추가'}).click();await admin.getByText('지역 내 본인 식음료 지출 (원)',{exact:false}).first().waitFor();await admin.getByRole('button',{name:'닫기',exact:true}).click();
  await participant.getByRole('button',{name:'홈',exact:true}).click();assert.equal(await participant.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
- await admin.getByRole('button',{name:'대시보드',exact:true}).click();await admin.getByRole('heading',{name:'현장 운영 현황',exact:true}).waitFor();await admin.screenshot({path:'/workspace/GPS/docs/assets/app-admin.png',fullPage:true});await staff.getByRole('button',{name:'현황',exact:true}).click();await staff.screenshot({path:'/workspace/GPS/docs/assets/app-staff.png',fullPage:true});
+ await admin.getByRole('button',{name:'대시보드',exact:true}).click();await admin.getByRole('heading',{name:'현장 운영 현황',exact:true}).waitFor();await admin.screenshot({path:path.join(screenshotDir,'app-admin.png'),fullPage:true});await staff.getByRole('button',{name:'현황',exact:true}).click();await staff.screenshot({path:path.join(screenshotDir,'app-staff.png'),fullPage:true});
  assert.deepEqual(errors,[]);console.log('PASS: initial setup, admin zone creation, shared staff login, QR check-in, stop blocking, survey entry, staff inquiry, survey templates, mobile overflow; no browser errors.');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

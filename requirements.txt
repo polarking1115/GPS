@@ -2,3 +2,4 @@ cffi==2.1.1
 cryptography==50.0.0
 pycparser==3.11
 qrcode==8.2
+tzdata==2025.2

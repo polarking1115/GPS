@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 from cryptography.fernet import Fernet
 import qrcode
 import qrcode.image.svg
+import map_config
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('FESTIVAL_DATA', ROOT / '.data')).resolve()
@@ -129,7 +130,7 @@ def initialize(seed=True):
 
 
 def default_settings():
-    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','building_maps':[], 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'features':{'missions':True,'survey':True,'programs':True},'sample':False}
+    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','building_maps':[], 'outdoor_map':map_config.outdoor_map({}), 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'features':{'missions':True,'survey':True,'programs':True},'sample':False}
 
 
 def seed_demo(db):
@@ -253,7 +254,7 @@ class Handler(BaseHTTPRequestHandler):
             candidate=candidate.strip(); parsed=urlparse(candidate)
             if parsed.scheme in ['https','http'] and parsed.netloc and parsed.path in ['', '/'] and not parsed.query and not parsed.fragment and not parsed.username:
                 embeds.append(parsed.scheme+'://'+parsed.netloc)
-        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self' "+' '.join(embeds)+"; base-uri 'self'; form-action 'self'")
+        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://server.arcgisonline.com; connect-src 'self'; frame-ancestors 'self' "+' '.join(embeds)+"; base-uri 'self'; form-action 'self'")
         origin=self.headers.get('Origin')
         if origin in embeds and self.command=='GET' and re.fullmatch(r'/api/events(?:/[\w-]+)?',urlparse(self.path).path):
             self.send_header('Access-Control-Allow-Origin',origin);self.send_header('Vary','Origin')
@@ -348,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def api(self,db,method,path,q,d):
         if path=='/api/status' and method=='GET':
-            return {'setup_required':not bool(db.execute('SELECT 1 FROM users').fetchone()),'integrations':{'map':'not_configured','translation':'not_configured','weather':'not_configured','giftcards':'manual_export'},'timezone':'Asia/Seoul'}
+            return {'setup_required':not bool(db.execute('SELECT 1 FROM users').fetchone()),'integrations':{'map':'osm_esri_registered_paths','translation':'not_configured','weather':'not_configured','giftcards':'manual_export'},'timezone':'Asia/Seoul'}
         if path=='/api/setup' and method=='POST':
             self.limited('setup',5)
             if db.execute('SELECT 1 FROM users').fetchone(): raise ApiError(409,'초기 관리자 설정이 완료되어 있습니다.')
@@ -444,7 +445,7 @@ class Handler(BaseHTTPRequestHandler):
             zones=[dict(r) for r in db.execute('SELECT * FROM zones WHERE event=?',(e,))]
             booths=[b for b in booth_stats(db,e) if b['approved']]
             # Strip all administrative/contact/certification secrets from public payloads.
-            return {'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','sample','building_maps','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
+            return {'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','sample','building_maps','outdoor_map','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
         if route=='pass' and method in ['GET','POST']:
             get_event(db,e,True);p,token=self.participant(db,e,method=='POST')
             result={'participant':None,'visits':[],'missions':mission_state(db,e,None),'survey':None,'reports':[]}
@@ -615,23 +616,14 @@ class Handler(BaseHTTPRequestHandler):
                 if not re.fullmatch(r'/assets/[\w.-]+',d['hero']): raise ApiError(400,'등록한 이미지 경로를 사용하세요.')
                 settings['hero']=d['hero']
             if 'maps' in d:
-                maps=d['maps']
-                if not isinstance(maps,list) or len(maps)>30: raise ApiError(400,'지도 수를 확인하세요.')
-                for item in maps:
-                    text(item.get('name',''),100)
-                    if not re.fullmatch(r'/assets/[\w.-]+',item.get('image','')): raise ApiError(400,'등록한 이미지 경로가 필요합니다.')
-                settings['building_maps']=maps
+                try: settings['building_maps']=map_config.building_maps(d['maps'])
+                except ValueError as error: raise ApiError(400,str(error))
+            if 'outdoor_map' in d:
+                try: settings['outdoor_map']=map_config.outdoor_map(d['outdoor_map'])
+                except ValueError as error: raise ApiError(400,str(error))
             if 'outdoor' in d:
-                nodes=d['outdoor'].get('nodes',[]);edges=d['outdoor'].get('edges',[])
-                if len(nodes)>2000 or len(edges)>6000: raise ApiError(400,'경로 데이터가 너무 큽니다.')
-                ids=set()
-                for n in nodes:
-                    text(n.get('id',''),60);text(n.get('name',''),120)
-                    if n['id'] in ids: raise ApiError(400,'중복 경로 지점입니다.')
-                    ids.add(n['id'])
-                    if not -90<=float(n['lat'])<=90 or not -180<=float(n['lng'])<=180: raise ApiError(400,'좌표 범위를 확인하세요.')
-                for edge in edges:
-                    if edge.get('from') not in ids or edge.get('to') not in ids: raise ApiError(400,'연결 지점을 확인하세요.')
+                try: nodes,edges=map_config.graph(d['outdoor'])
+                except ValueError as error: raise ApiError(400,str(error))
                 settings['outdoor_nodes']=nodes;settings['outdoor_edges']=edges
             status=d.get('status',ev['status'])
             if status not in ['draft','public','active','ended','archived']: raise ApiError(400,'행사 상태가 올바르지 않습니다.')
@@ -645,7 +637,7 @@ class Handler(BaseHTTPRequestHandler):
             if not content or len(content)>4*1024*1024: raise ApiError(400,'이미지는 4MB 이하여야 합니다.')
             valid=(mime=='image/png' and content.startswith(b'\x89PNG\r\n\x1a\n')) or (mime=='image/jpeg' and content.startswith(b'\xff\xd8\xff')) or (mime=='image/webp' and content.startswith(b'RIFF') and content[8:12]==b'WEBP')
             if not valid: raise ApiError(400,'이미지 형식을 확인하세요.')
-            # Kept in private data root, served through an authorized upload mapping below.
+            # These are public event artwork assets; never upload private documents here.
             folder=ROOT/'public/assets';name=uid()+{'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[mime]
             (folder/name).write_bytes(content);audit(db,e,actor,'image.upload',name);return {'url':'/assets/'+name}
         if route=='zone' and method=='POST':
@@ -659,7 +651,12 @@ class Handler(BaseHTTPRequestHandler):
             if not db.execute('SELECT 1 FROM zones WHERE id=? AND event=?',(zone,e)).fetchone(): raise ApiError(400,'존을 확인하세요.')
             x=float(d.get('x',b['x']));y=float(d.get('y',b['y']))
             if not 0<=x<=100 or not 0<=y<=100: raise ApiError(400,'위치는 0~100% 범위입니다.')
-            db.execute('UPDATE booths SET name=?,zone=?,description=?,code=?,building=?,x=?,y=?,approved=? WHERE id=?',(text(d.get('name',b['name']),200),zone,text(d.get('description',b['description']),3000,False),text(d.get('code',b['code']),50,False),text(d.get('building',b['building']),100,False),x,y,int(bool(d.get('approved',b['approved']))),bid))
+            lat,lng=d.get('lat',b['lat']),d.get('lng',b['lng'])
+            if lat is None and lng is None: pass
+            else:
+                try: lat,lng=map_config.point([lat,lng])
+                except ValueError as error: raise ApiError(400,str(error))
+            db.execute('UPDATE booths SET name=?,zone=?,description=?,code=?,building=?,x=?,y=?,lat=?,lng=?,approved=? WHERE id=?',(text(d.get('name',b['name']),200),zone,text(d.get('description',b['description']),3000,False),text(d.get('code',b['code']),50,False),text(d.get('building',b['building']),100,False),x,y,lat,lng,int(bool(d.get('approved',b['approved']))),bid))
             audit(db,e,actor,'booth.edit',bid);return {'ok':True}
         if route=='booth-access' and method=='POST':
             need('owner');b=db.execute('SELECT id,manager,qr FROM booths WHERE id=? AND event=?',(d.get('booth'),e)).fetchone()

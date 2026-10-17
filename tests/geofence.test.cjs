@@ -1,0 +1,15 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {Geofence,distance,inside}=require('../public/map-tools.js');
+const b={name:'전시장',image:'/assets/plan.png',geofence:{enabled:true,entrance:[34.75,127.75],bounds:[[34.7499,127.7499],[34.752,127.752]],entry_radius:20,exit_buffer:40,dwell_ms:10000,max_accuracy:35}};
+const fix=(timestamp,overrides={})=>({lat:34.75,lng:127.75,accuracy:10,timestamp,...overrides});
+function enter(g){assert.equal(g.update(fix(100000),100000),null);assert.deepEqual(g.update(fix(110000),110000),{mode:'indoor',building:'전시장'})}
+test('진입과 이탈은 서로 다른 범위와 연속 시간으로 판단',()=>{const g=new Geofence([b]);enter(g);assert.equal(g.update(fix(120000,{lat:34.7518,lng:127.7518}),120000),null);assert.equal(g.active,'전시장');assert.equal(g.update(fix(130000,{lat:34.76}),130000),null);assert.deepEqual(g.update(fix(140000,{lat:34.76}),140000),{mode:'outdoor',previous:'전시장'})});
+test('입구에서 멀어져도 건물 안이면 실내 유지',()=>{const g=new Geofence([b]);enter(g);for(let i=1;i<5;i++)assert.equal(g.update(fix(110000+i*10000,{lat:34.7518,lng:127.7518}),110000+i*10000),null);assert.equal(g.active,'전시장')});
+test('실내 신호 손실과 부정확한 바깥 좌표는 야외 전환하지 않음',()=>{const g=new Geofence([b]);enter(g);g.signalLost();assert.equal(g.active,'전시장');for(const t of [120000,130000])assert.equal(g.update(fix(t,{lat:34.76,accuracy:150}),t),null);assert.equal(g.active,'전시장')});
+test('오래된 위치·중복 표본·미래 표본 거부',()=>{const g=new Geofence([b]);assert.equal(g.update(fix(100000),140000),null);assert.equal(g.update(fix(150000),140000),null);assert.equal(g.update(fix(150000),150000),null);assert.equal(g.update(fix(150000),160000),null);assert.equal(g.active,null)});
+test('나쁜 정확도는 진입 후보를 초기화',()=>{const g=new Geofence([b]);g.update(fix(100000),100000);g.update(fix(110000,{accuracy:150}),110000);assert.equal(g.update(fix(120000),120000),null);assert.deepEqual(g.update(fix(130000),130000),{mode:'indoor',building:'전시장'})});
+test('수동 선택은 1분간 자동 전환 유예',()=>{const g=new Geofence([b]);g.manual(null,100000);assert.equal(g.update(fix(110000),110000),null);assert.equal(g.update(fix(140000),140000),null);assert.equal(g.update(fix(160000),160000),null);assert.deepEqual(g.update(fix(170000),170000),{mode:'indoor',building:'전시장'})});
+test('인접 건물 입구를 위치 오차로 구분 못하면 전환하지 않음',()=>{const second=structuredClone(b);second.name='인접 건물';second.geofence.entrance=[34.75001,127.75001];const g=new Geofence([b,second]);assert.equal(g.update(fix(100000),100000),null);assert.equal(g.update(fix(110000),110000),null)});
+test('비활성 건물과 정확도 없는 좌표는 진입하지 않음',()=>{const disabled=structuredClone(b);disabled.geofence.enabled=false;const g=new Geofence([disabled]);assert.equal(g.update(fix(100000),100000),null);assert.equal(g.update(fix(110000),110000),null);const h=new Geofence([b]);assert.equal(h.update(fix(100000,{accuracy:NaN}),100000),null)});
+test('미터 기반 경계 여유와 거리 계산',()=>{assert.equal(distance({lat:34,lng:127},{lat:34,lng:127}),0);assert(distance({lat:34,lng:127},{lat:34.001,lng:127})>110);assert(inside({lat:34.7498,lng:127.75},b.geofence.bounds,40));assert(!inside({lat:34.74,lng:127.75},b.geofence.bounds,40))});
