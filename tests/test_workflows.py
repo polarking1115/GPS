@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, build_opener, HTTPCookieProcessor
 
@@ -170,5 +171,46 @@ class Workflows(unittest.TestCase):
         self.admin.ok(self.e('booth'),'POST',{'id':'booth-1','lat':34.75,'lng':127.75,'building':''})
         self.assertEqual(next(b for b in Client().ok('/api/events/youth-expo')['booths'] if b['id']=='booth-1')['lat'],34.75)
         self.assertEqual(self.admin.call(self.e('booth'),'POST',{'id':'booth-1','lat':None,'lng':127.75})[0],400)
+
+    def test_12_translation_review_invalidation_and_sensitive_exclusion(self):
+        def fake_translate(texts):
+            self.assertNotIn('010', '\n'.join(texts));self.assertNotIn('A suspicious device','\n'.join(texts))
+            return ['EN: '+t for t in texts]
+        with patch.object(app.integrations,'translate_public',side_effect=fake_translate):
+            generated=self.admin.ok(self.e('translations/generate'),'POST',{})
+        self.assertGreater(generated['generated'],0)
+        before=Client().ok('/api/events/youth-expo?lang=en')
+        self.assertNotIn('EN:',before['event']['name'])
+        listing=self.admin.ok(self.e('translations'))['items'];item=next(x for x in listing if x['kind']=='booth' and x['id']=='booth-1' and x['field']=='name')
+        review={**item,'reviewed':True,'translation':'Reviewed booth title'}
+        self.admin.ok(self.e('translations/review'),'POST',{'items':[review]})
+        after=Client().ok('/api/events/youth-expo?lang=en');self.assertEqual(next(b for b in after['booths'] if b['id']=='booth-1')['name'],'Reviewed booth title')
+        self.admin.ok(self.e('booth'),'POST',{'id':'booth-1','name':'새로운 원문'})
+        stale=Client().ok('/api/events/youth-expo?lang=en');self.assertEqual(next(b for b in stale['booths'] if b['id']=='booth-1')['name'],'새로운 원문')
+        self.assertEqual(self.admin.call(self.e('translations/review'),'POST',{'items':[review]})[0],409)
+        notice=next(x for x in listing if x['kind']=='notice');notice.update(translation='Reviewed notice',reviewed=True)
+        self.assertEqual(self.admin.call(self.e('translations/review'),'POST',{'items':[notice]})[0],400)
+        self.admin.ok(self.e('translations/review'),'POST',{'items':[notice],'critical_confirmed':True})
+        self.assertEqual(Client().call(self.e('translations'))[0],401)
+
+    def test_13_translation_network_does_not_block_booth_writes(self):
+        p=self.participant();access=self.admin.ok(self.e('booth-access'),'POST',{'booth':'booth-1'})
+        def fake_translate(texts):
+            # This nested request requires a separate SQLite writer while translation waits.
+            p.ok(self.e('certify'),'POST',{'qr':access['qr']})
+            return ['EN: '+t for t in texts]
+        with patch.object(app.integrations,'translate_public',side_effect=fake_translate):self.admin.ok(self.e('translations/generate'),'POST',{})
+        self.assertTrue(p.ok(self.e('pass'))['visits'])
+
+    def test_14_weather_endpoint_and_configuration(self):
+        self.assertEqual(Client().ok(self.e('weather'))['status'],'disabled')
+        self.admin.ok(self.e('settings'),'POST',{'weather':{'enabled':True,'locations':[{'name':'행사장','nx':60,'ny':127}]}})
+        with patch.dict('os.environ',{},clear=True):self.assertEqual(Client().ok(self.e('weather'))['status'],'not_configured')
+        fake={'status':'ok','current':{'temperature':21},'forecast':[]}
+        with patch.object(app.integrations,'weather',return_value=fake):
+            result=Client().ok(self.e('weather'));self.assertEqual(result['location']['name'],'행사장');self.assertEqual(result['current']['temperature'],21)
+        self.assertEqual(Client().call(self.e('weather')+'?location=99')[0],400)
+        self.assertEqual(self.admin.call(self.e('settings'),'POST',{'weather':{'enabled':True,'locations':[]}})[0],400)
+        self.assertEqual(self.admin.ok(self.e('integrations/grid'),'POST',{'lat':37.5665,'lng':126.978}),{'nx':60,'ny':127})
 
 if __name__=='__main__': unittest.main(verbosity=2)

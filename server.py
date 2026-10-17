@@ -24,6 +24,8 @@ from cryptography.fernet import Fernet
 import qrcode
 import qrcode.image.svg
 import map_config
+import integrations
+import translations
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('FESTIVAL_DATA', ROOT / '.data')).resolve()
@@ -121,6 +123,7 @@ def initialize(seed=True):
         CREATE TABLE IF NOT EXISTS draws(id TEXT PRIMARY KEY,event TEXT NOT NULL REFERENCES events(id),prize TEXT NOT NULL,actor TEXT NOT NULL,candidates TEXT NOT NULL,winners TEXT NOT NULL,created TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY,event TEXT NOT NULL REFERENCES events(id),participant TEXT NOT NULL REFERENCES participants(id),kind TEXT NOT NULL,location TEXT NOT NULL,body TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'received',reply TEXT NOT NULL DEFAULT '',created TEXT NOT NULL,updated TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS staff_surveys(booth TEXT PRIMARY KEY REFERENCES booths(id),answers TEXT NOT NULL,updated TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS translations(event TEXT NOT NULL REFERENCES events(id),kind TEXT NOT NULL,entity TEXT NOT NULL,field TEXT NOT NULL,lang TEXT NOT NULL DEFAULT 'en',source_hash TEXT NOT NULL,translation TEXT NOT NULL,reviewed INTEGER NOT NULL DEFAULT 0,updated TEXT NOT NULL,PRIMARY KEY(event,kind,entity,field,lang));
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,event TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,detail TEXT NOT NULL,created TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS booth_event ON booths(event);
         CREATE INDEX IF NOT EXISTS response_event ON responses(event);
@@ -130,7 +133,7 @@ def initialize(seed=True):
 
 
 def default_settings():
-    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','building_maps':[], 'outdoor_map':map_config.outdoor_map({}), 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'features':{'missions':True,'survey':True,'programs':True},'sample':False}
+    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','building_maps':[], 'outdoor_map':map_config.outdoor_map({}), 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'weather':{'enabled':False,'locations':[]},'features':{'missions':True,'survey':True,'programs':True},'sample':False}
 
 
 def seed_demo(db):
@@ -349,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def api(self,db,method,path,q,d):
         if path=='/api/status' and method=='GET':
-            return {'setup_required':not bool(db.execute('SELECT 1 FROM users').fetchone()),'integrations':{'map':'osm_esri_registered_paths','translation':'not_configured','weather':'not_configured','giftcards':'manual_export'},'timezone':'Asia/Seoul'}
+            return {'setup_required':not bool(db.execute('SELECT 1 FROM users').fetchone()),'integrations':{'map':'osm_esri_registered_paths','translation':'configured' if integrations.configured()['translation']['configured'] else 'not_configured','weather':'configured' if integrations.configured()['weather']['configured'] else 'not_configured','giftcards':'manual_export'},'timezone':'Asia/Seoul'}
         if path=='/api/setup' and method=='POST':
             self.limited('setup',5)
             if db.execute('SELECT 1 FROM users').fetchone(): raise ApiError(409,'초기 관리자 설정이 완료되어 있습니다.')
@@ -440,12 +443,22 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/events/([\w-]+)(?:/(.*))?',path)
         if not m: raise ApiError(404,'API를 찾을 수 없습니다.')
         e,route=m[1],m[2] or '';ev=get_event(db,e)
+        if route=='weather' and method=='GET':
+            get_event(db,e,True)
+            config=ev['settings'].get('weather',{})
+            if not config.get('enabled'): return {'status':'disabled','message':'행사 날씨 안내가 아직 설정되지 않았습니다.','locations':[],'warning_url':'https://www.weather.go.kr/w/weather/warning/status.do'}
+            locations=config.get('locations',[])
+            index=integer(int(q.get('location',['0'])[0]),0,max(0,len(locations)-1))
+            loc=locations[index]
+            result=integrations.weather(loc['nx'],loc['ny'])
+            return {**result,'location':loc,'locations':[{'name':x['name']} for x in locations],'warning_url':'https://www.weather.go.kr/w/weather/warning/status.do'}
         if route=='' and method=='GET':
             if ev['status']=='draft': self.admin(db,e)
             zones=[dict(r) for r in db.execute('SELECT * FROM zones WHERE event=?',(e,))]
             booths=[b for b in booth_stats(db,e) if b['approved']]
             # Strip all administrative/contact/certification secrets from public payloads.
-            return {'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','sample','building_maps','outdoor_map','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
+            payload={'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','sample','building_maps','outdoor_map','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
+            return translations.public_payload(db,e,payload) if q.get('lang',['ko'])[0]=='en' else payload
         if route=='pass' and method in ['GET','POST']:
             get_event(db,e,True);p,token=self.participant(db,e,method=='POST')
             result={'participant':None,'visits':[],'missions':mission_state(db,e,None),'survey':None,'reports':[]}
@@ -453,6 +466,7 @@ class Handler(BaseHTTPRequestHandler):
                 r=db.execute('SELECT id FROM responses WHERE participant=? AND event=?',(p['id'],e)).fetchone()
                 entry=db.execute('SELECT en.status,w.status delivery,p.name prize FROM entries en JOIN responses r ON r.id=en.response LEFT JOIN winners w ON w.entry=en.id LEFT JOIN prizes p ON p.id=w.prize WHERE r.participant=? AND en.event=?',(p['id'],e)).fetchone()
                 result.update(participant={'id':p['id'],'created':p['created']},visits=[dict(r) for r in db.execute('SELECT v.booth,b.name,b.code,MIN(v.created) created,MAX(r.score) rating FROM visits v JOIN booths b ON b.id=v.booth LEFT JOIN ratings r ON r.booth=v.booth AND r.participant=v.participant WHERE v.participant=? GROUP BY v.booth',(p['id'],))],missions=mission_state(db,e,p['id']),survey={'submitted':bool(r),'entry':dict(entry) if entry else None},reports=[dict(r,reply=decrypt(r['reply'])) for r in db.execute('SELECT id,kind,status,reply,created FROM reports WHERE participant=? AND event=?',(p['id'],e))])
+            if q.get('lang',['ko'])[0]=='en': result=translations.pass_payload(db,e,result)
             if method=='POST':
                 secure='; Secure' if os.environ.get('FESTIVAL_SECURE_COOKIE')=='1' else ''
                 self.send(200,result,headers={'Set-Cookie':f'festival_pass={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000{secure}'})
@@ -486,7 +500,8 @@ class Handler(BaseHTTPRequestHandler):
             get_event(db,e,True);s=db.execute('SELECT * FROM surveys WHERE event=? AND published=1',(e,)).fetchone()
             if not s: return {'survey':None}
             p,_=self.participant(db,e);pid=p['id'] if p else None
-            return {'survey':dict(s,questions=unpack(s['questions'])),'can_respond':gate_ok(db,ev,pid,'survey_gate'),'can_enter':gate_ok(db,ev,pid,'entry_gate'),'open':is_open('',s['end']) and ev['status']!='archived'}
+            result={'survey':dict(s,questions=unpack(s['questions'])),'can_respond':gate_ok(db,ev,pid,'survey_gate'),'can_enter':gate_ok(db,ev,pid,'entry_gate'),'open':is_open('',s['end']) and ev['status']!='archived'}
+            return translations.survey_payload(db,e,result) if q.get('lang',['ko'])[0]=='en' else result
         if route=='survey' and method=='POST':
             get_event(db,e,True);p,_=self.participant(db,e)
             if not p: raise ApiError(401,'참가 패스를 생성하세요.')
@@ -598,6 +613,56 @@ class Handler(BaseHTTPRequestHandler):
                 refs=unpack(n['refs']);target=[b for b in bs if n['target']=='all' or n['target']=='zone' and b['zone'] in refs or n['target']=='booth' and b['id'] in refs]
                 notices.append(dict(n,refs=refs,target_count=len(target),confirmed=[dict(x) for x in db.execute('SELECT booth,display,created FROM acknowledgments WHERE notice=?',(n['id'],))]))
             return {'event':ev,'roles':sorted(s['roles']),'booths':bs,'zones':zones,'stats':st,'missions':mission_state(db,e,None,False),'survey':dict(survey,questions=unpack(survey['questions'])) if survey else None,'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'inquiries':inquiries,'notices':notices,'prizes':[dict(r) for r in db.execute('SELECT * FROM prizes WHERE event=?',(e,))],'winners':[dict(r) for r in db.execute('SELECT w.*,p.name prize_name FROM winners w JOIN prizes p ON p.id=w.prize WHERE w.event=?',(e,))]}
+        if route=='integrations/grid' and method=='POST':
+            need('owner')
+            try: return integrations.grid_from_coordinate(d.get('lat'),d.get('lng'))
+            except ValueError as error: raise ApiError(400,str(error))
+        if route=='integrations' and method=='GET':
+            return {'providers':integrations.configured(),'weather':ev['settings'].get('weather',{'enabled':False,'locations':[]}),'note':'키의 존재 여부이며 실제 인증 성공을 의미하지 않습니다.'}
+        if route=='translations' and method=='GET':
+            need('owner','content')
+            rows={(r['kind'],r['entity'],r['field']):dict(r) for r in db.execute('SELECT * FROM translations WHERE event=? AND lang="en"',(e,))}
+            result=[]
+            for source in translations.sources(db,e):
+                row=rows.get((source['kind'],source['id'],source['field']))
+                result.append({**source,'translation':row['translation'] if row else '', 'reviewed':bool(row and row['reviewed'] and row['source_hash']==source['source_hash']),'stale':bool(row and row['source_hash']!=source['source_hash'])})
+            return {'items':result,'provider':integrations.configured()['translation']}
+        if route=='translations/generate' and method=='POST':
+            need('owner','content');self.limited('translation',4)
+            existing={(r['kind'],r['entity'],r['field']):dict(r) for r in db.execute('SELECT * FROM translations WHERE event=? AND lang="en"',(e,))}
+            pending=[x for x in translations.sources(db,e) if not ((old:=existing.get((x['kind'],x['id'],x['field']))) and old['source_hash']==x['source_hash'])]
+            batch=[];size=0
+            for source in pending:
+                if len(batch)>=30 or size+len(source['source'])>30000: break
+                if len(source['source'])>7000: continue
+                batch.append(source);size+=len(source['source'])
+            if not batch:return {'generated':0,'remaining':len(pending),'message':'새로 번역할 내용이 없습니다.'}
+            # Network calls must never hold SQLite's write lock during booth check-ins.
+            db.commit()
+            try: output=integrations.translate_public([x['source'] for x in batch])
+            except integrations.IntegrationError as error: raise ApiError(503,str(error))
+            db.execute('BEGIN IMMEDIATE')
+            current={(x['kind'],x['id'],x['field']):x for x in translations.sources(db,e)}
+            generated=0
+            for source,translated in zip(batch,output):
+                key=(source['kind'],source['id'],source['field']);live=current.get(key)
+                old=db.execute('SELECT reviewed,source_hash FROM translations WHERE event=? AND kind=? AND entity=? AND field=? AND lang="en"',(e,*key)).fetchone()
+                if not live or live['source_hash']!=source['source_hash'] or (old and old['reviewed'] and old['source_hash']==source['source_hash']):continue
+                db.execute('INSERT INTO translations VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(event,kind,entity,field,lang) DO UPDATE SET source_hash=excluded.source_hash,translation=excluded.translation,reviewed=0,updated=excluded.updated',(e,*key,'en',source['source_hash'],translated,0,now()));generated+=1
+            audit(db,e,actor,'translations.generate',{'count':generated})
+            return {'generated':generated,'remaining':max(0,len(pending)-len(batch)),'message':'초안을 검토한 뒤 공개하세요.'}
+        if route=='translations/review' and method=='POST':
+            need('owner','content');items=d.get('items',[])
+            if not isinstance(items,list) or not 1<=len(items)<=60:raise ApiError(400,'검토 항목을 확인하세요.')
+            current={(x['kind'],x['id'],x['field']):x for x in translations.sources(db,e)}
+            for item in items:
+                key=(item.get('kind'),item.get('id'),item.get('field'));source=current.get(key)
+                if not source or item.get('source_hash')!=source['source_hash']:raise ApiError(409,'원문이 변경됐습니다. 목록을 갱신한 뒤 다시 검토하세요.')
+                if source['critical'] and item.get('reviewed') and d.get('critical_confirmed') is not True:raise ApiError(400,'안전 공지·동의문 번역은 별도 검토 확인이 필요합니다.')
+                translated=text(item.get('translation',''),20000)
+                db.execute('INSERT INTO translations VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(event,kind,entity,field,lang) DO UPDATE SET source_hash=excluded.source_hash,translation=excluded.translation,reviewed=excluded.reviewed,updated=excluded.updated',(e,*key,'en',source['source_hash'],translated,int(bool(item.get('reviewed'))),now()))
+            audit(db,e,actor,'translations.review',{'count':len(items)})
+            return {'ok':True}
         if route=='settings' and method=='POST':
             need('owner');settings=ev['settings']
             for k in ['survey_gate','entry_gate']:
@@ -605,6 +670,9 @@ class Handler(BaseHTTPRequestHandler):
                     if d[k] not in ['all','missions']: raise ApiError(400,'자격 설정을 확인하세요.')
                     settings[k]=d[k]
             if 'required_missions' in d: settings['required_missions']=integer(d['required_missions'],1,100)
+            if 'weather' in d:
+                try: settings['weather']=integrations.grid_settings(d['weather'])
+                except ValueError as error: raise ApiError(400,str(error))
             if 'entry_end' in d: settings['entry_end']=date_value(d['entry_end'])
             if 'safety_phone' in d: settings['safety_phone']=text(d['safety_phone'],40,False)
             if 'reporting_enabled' in d: settings['reporting_enabled']=bool(d['reporting_enabled'])
