@@ -1,0 +1,28 @@
+# Disposable preview only. Do not use this free service for a real event.
+services:
+  - type: web
+    name: gps-festival-demo
+    runtime: python
+    plan: free
+    branch: main
+    autoDeployTrigger: "off"
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: python deploy_demo.py
+    healthCheckPath: /api/status
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.12"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: FESTIVAL_DATA
+        value: /tmp/festival-demo
+      - key: FESTIVAL_SECURE_COOKIE
+        value: "1"
+      - key: FESTIVAL_ALLOW_SETUP
+        value: "0"
+      - key: FESTIVAL_TEST_DEPLOYMENT
+        value: "1"
+      - key: FESTIVAL_ADMIN_EMAIL
+        sync: false
+      - key: FESTIVAL_ADMIN_PASSWORD
+        sync: false

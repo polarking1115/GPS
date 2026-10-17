@@ -297,7 +297,14 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 file=(ROOT/'public'/path.lstrip('/')).resolve()
                 if not file.is_relative_to(ROOT/'public') or not file.is_file(): raise ApiError(404,'파일을 찾을 수 없습니다.')
-            self.send(200,file.read_bytes(),mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
+            content=file.read_bytes()
+            if file==ROOT/'public/index.html' and os.environ.get('FESTIVAL_TEST_DEPLOYMENT')=='1':
+                banner=('<div class="test-deployment" role="note">'
+                        '무료 테스트 · 실제 개인정보를 입력하지 마세요. '
+                        '휴면·재시작 시 기록이 초기화될 수 있습니다.'
+                        '<br><span lang="en">Test only · Use fictional information. Data may reset.</span></div>')
+                content=content.replace(b'<body>',('<body>'+banner).encode(),1)
+            self.send(200,content,mimetypes.guess_type(str(file))[0] or 'application/octet-stream')
         except ApiError as e: self.send(e.status,{'error':e.message})
         except (json.JSONDecodeError,ValueError,TypeError,KeyError,OverflowError): self.send(400,{'error':'입력 형식 또는 필수 항목을 확인하세요.'})
         except sqlite3.IntegrityError: self.send(409,{'error':'중복되거나 연결된 정보가 올바르지 않습니다.'})

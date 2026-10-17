@@ -5,3 +5,5 @@
 @media print{body.modal-open>#app{display:none!important}body.modal-open #modal{display:block!important;position:static;background:white}}
 
 .forecast-strip{display:flex;gap:10px;overflow:auto}.forecast-strip>div{min-width:95px;padding:12px;background:#f0f7ff;border-radius:10px;text-align:center}.forecast-strip strong{display:block;font-size:20px;margin:6px 0}.forecast-strip small{display:block;font-size:10px}.translation-source{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto}.translation-list .card p{overflow-wrap:anywhere}.weather-stats .stat strong{font-size:23px}
+
+.test-deployment{position:relative;padding:10px 16px;border-bottom:1px solid #ebd58b;background:#fff7db;color:#5c460e;text-align:center;font-size:12px;line-height:1.6;overflow-wrap:anywhere}.test-deployment span{font-size:11px}
