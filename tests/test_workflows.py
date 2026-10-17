@@ -213,4 +213,23 @@ class Workflows(unittest.TestCase):
         self.assertEqual(self.admin.call(self.e('settings'),'POST',{'weather':{'enabled':True,'locations':[]}})[0],400)
         self.assertEqual(self.admin.ok(self.e('integrations/grid'),'POST',{'lat':37.5665,'lng':126.978}),{'nx':60,'ny':127})
 
+    def test_15_draft_dashboard_weather_requires_event_permission(self):
+        draft=self.admin.ok('/api/events','POST',{'name':'Private weather event'})['id']
+        self.admin.ok(self.e('settings',draft),'POST',{'weather':{'enabled':True,'locations':[{'name':'Private venue','nx':60,'ny':127}]}})
+        self.assertEqual(Client().call(self.e('weather',draft))[0],404)
+        self.assertEqual(Client().call(self.e('admin-weather',draft))[0],401)
+        fake={'status':'ok','current':{'temperature':19},'forecast':[]}
+        with patch.object(app.integrations,'weather',return_value=fake):
+            self.assertEqual(self.admin.ok(self.e('admin-weather',draft))['current']['temperature'],19)
+        self.assertEqual(self.admin.call(self.e('admin-weather',draft)+'?location=99')[0],400)
+        invite=self.admin.ok(self.e('invite'),'POST',{'email':'weather-reader@example.test','role':'content'})['invite']
+        reader=Client();reader.ok('/api/accept-invite','POST',{'invite':invite,'name':'Weather reader','password':'weather-reader-password'})
+        reader.token=reader.ok('/api/login','POST',{'email':'weather-reader@example.test','password':'weather-reader-password'})['token']
+        with patch.object(app.integrations,'weather',return_value=fake):
+            self.assertEqual(reader.ok(self.e('admin-weather'))['current']['temperature'],19)
+        self.assertEqual(reader.call(self.e('admin-weather',draft))[0],403)
+        access=self.admin.ok(self.e('booth-access'),'POST',{'booth':'booth-1','password':'weather-staff-password'})
+        staff=Client();staff.token=staff.ok('/api/booth-login','POST',{'manager':access['manager'],'password':'weather-staff-password','display':'Staff'})['token']
+        self.assertEqual(staff.call(self.e('admin-weather'))[0],403)
+
 if __name__=='__main__': unittest.main(verbosity=2)

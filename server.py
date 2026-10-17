@@ -450,8 +450,9 @@ class Handler(BaseHTTPRequestHandler):
         m=re.fullmatch(r'/api/events/([\w-]+)(?:/(.*))?',path)
         if not m: raise ApiError(404,'API를 찾을 수 없습니다.')
         e,route=m[1],m[2] or '';ev=get_event(db,e)
-        if route=='weather' and method=='GET':
-            get_event(db,e,True)
+        if route in ['weather','admin-weather'] and method=='GET':
+            if route=='admin-weather': self.admin(db,e)
+            else: get_event(db,e,True)
             config=ev['settings'].get('weather',{})
             if not config.get('enabled'): return {'status':'disabled','message':'행사 날씨 안내가 아직 설정되지 않았습니다.','locations':[],'warning_url':'https://www.weather.go.kr/w/weather/warning/status.do'}
             locations=config.get('locations',[])
