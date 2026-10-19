@@ -2,6 +2,8 @@
 
 여러 축제에 재사용하는 모바일 웹 앱과 부스·운영본부 관리 화면입니다. 기존 클릭형 시안과 달리 Python API와 SQLite에 실제 데이터를 저장합니다. 현재는 로컬 개발·검토용 구현이며, 행사 배포·1만 명 규모 검증 완료 상태가 아닙니다.
 
+[사용자 구조·운영 목적 한 장 요약 PDF](docs/platform-one-page.pdf) · [편집용 HTML](docs/platform-one-page.html)
+
 ## 무료 테스트 배포
 
 [Render에서 테스트 배포 시작](https://render.com/deploy?repo=https://github.com/polarking1115/GPS) · [배포·로그인 안내](docs/free-test-deployment.md)
