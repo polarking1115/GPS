@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1131" viewBox="0 0 1600 1131" fill="#163052" role="img" aria-labelledby="title description">
+ <title id="title">행사 플랫폼 구조도 — 참가자, 행사 운영자, 부스 운영자의 행동과 데이터 활용</title>
+ <desc id="description">세 사용자가 행사 플랫폼을 통해 참여 기록, 안내, 설정과 현황, 부스 상태와 문의를 주고받습니다. 이 기록은 참여 현황, 만족도, 운영 대응, 성과 분석의 기반이 되고 다음 행사 개선에 사용됩니다.</desc>
+ <defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#8ba2bd"/></marker>
+  <marker id="teal-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#009bb8"/></marker>
+  <marker id="pink-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#d83b83"/></marker>
+  <linearGradient id="hub" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#16479f"/><stop offset="1" stop-color="#123276"/></linearGradient>
+  <style>
+   text{font-family:'Noto Sans CJK KR','Noto Sans KR','Malgun Gothic',sans-serif} .muted{fill:#627892}.small{font-size:16px}.body{font-size:20px}.role-title{font-size:31px;font-weight:800}.benefit{font-size:18px;font-weight:700}.connector{fill:none;stroke:#8ba2bd;stroke-width:2.5;marker-end:url(#arrow)}.teal-line{stroke:#009bb8;marker-end:url(#teal-arrow)}.pink-line{stroke:#d83b83;marker-end:url(#pink-arrow)}.label{font-size:16px;font-weight:600;fill:#5d7591;text-anchor:middle}.white{fill:#fff}.output-title{font-size:24px;font-weight:800}.output-body{font-size:19px;fill:#647a96}.output-goal{font-size:21px;font-weight:700}
+  </style>
+ </defs>
+ <rect width="1600" height="1131" fill="#fff"/>
+ <rect x="64" y="37" width="1472" height="6" rx="3" fill="#00a3c4"/>
+ <text x="64" y="74" font-size="17" fill="#008fae" font-weight="700">사용자 구조와 데이터 활용 흐름</text>
+ <text x="1536" y="74" text-anchor="end" class="small muted">여러 축제에 재사용하는 플랫폼 · 2026.10.19</text>
+ <text x="64" y="129" font-size="42" font-weight="800" letter-spacing="-1">행사 참여와 운영을, <tspan fill="#009bb8">하나의 흐름으로.</tspan></text>
+ <text x="64" y="166" font-size="19" class="muted">실내·야외 통합　·　개인 참가 중심　·　행사별 데이터·권한 분리　·　화면별 이용방법 안내</text>
+
+ <!-- Event organizer: design and decisions above the shared platform. -->
+ <g aria-label="행사 운영자">
+  <rect x="565" y="196" width="470" height="210" rx="20" fill="#f4f7ff" stroke="#cbd8f1" stroke-width="2"/>
+  <rect x="565" y="196" width="470" height="6" rx="3" fill="#123b9b"/>
+  <text x="590" y="244" class="role-title" fill="#123b9b">행사 운영자</text>
+  <text x="590" y="276" font-size="18" class="muted">설계하고 · 현황을 보고 · 대응하기</text>
+  <text x="590" y="316" font-size="19">행사·존·부스 설계</text><text x="820" y="316" font-size="19">공지·미션·설문 관리</text>
+  <text x="590" y="347" font-size="19">날씨·문의·안전 대응</text><text x="820" y="347" font-size="19">추첨·성과 보고</text>
+  <line x1="590" y1="362" x2="1010" y2="362" stroke="#d8e2f4"/>
+  <text x="590" y="389" class="benefit" fill="#123b9b">얻는 것　현장 상황 파악 · 신속한 대응</text>
+ </g>
+
+ <!-- Participant and booth operator face each other through the hub. -->
+ <g aria-label="참가자">
+  <rect x="64" y="380" width="400" height="280" rx="20" fill="#f0fbfd" stroke="#bfe6ec" stroke-width="2"/>
+  <rect x="64" y="380" width="400" height="6" rx="3" fill="#009bb8"/>
+  <text x="90" y="430" class="role-title" fill="#009bb8">참가자</text>
+  <text x="90" y="462" font-size="18" class="muted">찾고 · 체험하고 · 기록하기</text>
+  <text x="90" y="503" class="body">안내·지도·프로그램 확인</text>
+  <text x="90" y="534" class="body">부스 QR 인증·선택 별점</text>
+  <text x="90" y="565" class="body">미션·설문·추첨 응모·안전 안내</text>
+  <line x1="90" y1="589" x2="438" y2="589" stroke="#c9e9ef"/>
+  <text x="90" y="624" class="benefit" fill="#008da7">얻는 것　편리한 참여 · 나의 활동 기록</text>
+ </g>
+ <g aria-label="부스 운영자">
+  <rect x="1136" y="380" width="400" height="280" rx="20" fill="#fff5fa" stroke="#efcddd" stroke-width="2"/>
+  <rect x="1136" y="380" width="400" height="6" rx="3" fill="#d83b83"/>
+  <text x="1162" y="430" class="role-title" fill="#d83b83">부스 운영자</text>
+  <text x="1162" y="462" font-size="18" class="muted">등록하고 · 운영하고 · 소통하기</text>
+  <text x="1162" y="501" font-size="19">존 선택·등록·여러 담당자 공동 관리</text>
+  <text x="1162" y="529" font-size="19">QR 출력·운영 상태·참여 현황 확인</text>
+  <text x="1162" y="557" font-size="19">공지 확인·유형별 문의·실적 설문</text>
+  <line x1="1162" y1="589" x2="1510" y2="589" stroke="#efd8e4"/>
+  <text x="1162" y="624" class="benefit" fill="#c02f72">얻는 것　업무 간소화 · 부스 성과 파악</text>
+ </g>
+
+ <g aria-label="행사 운영 플랫폼">
+  <rect x="575" y="490" width="450" height="170" rx="24" fill="url(#hub)"/>
+  <text x="800" y="540" text-anchor="middle" class="white" font-size="19" font-weight="600">모든 사용자를 연결하는 공통 앱</text>
+  <text x="800" y="583" text-anchor="middle" class="white" font-size="34" font-weight="800">행사 운영 플랫폼</text>
+  <text x="800" y="622" text-anchor="middle" fill="#d9ecff" font-size="19">안내 · 참여 기록 · 현장 업무 · 행사 재사용</text>
+ </g>
+
+ <!-- Two-way exchange labels identify what each actor supplies and receives. -->
+ <path d="M780 416V477" class="connector"/><text x="744" y="454" class="label">설정</text>
+ <path d="M820 477V416" class="connector teal-line"/><text x="862" y="454" class="label">현황</text>
+ <path d="M476 522H563" class="connector teal-line"/><text x="519" y="504" class="label">인증·설문</text>
+ <path d="M563 607H476" class="connector teal-line"/><text x="519" y="589" class="label">안내·미션</text>
+ <path d="M1124 522H1037" class="connector pink-line"/><text x="1080" y="504" class="label">상태·문의</text>
+ <path d="M1037 607H1124" class="connector pink-line"/><text x="1080" y="589" class="label">공지·지원</text>
+
+ <!-- Four outputs share one data collection bus. -->
+ <path d="M800 672V738" fill="none" stroke="#8ba2bd" stroke-width="3"/>
+ <text x="827" y="712" font-size="18" font-weight="700" fill="#617a98">활동을 기록·집계</text>
+ <path d="M239 738H1361" fill="none" stroke="#b0c0d2" stroke-width="2.5"/>
+ <path d="M239 738V772" class="connector"/><path d="M613 738V772" class="connector"/><path d="M987 738V772" class="connector"/><path d="M1361 738V772" class="connector"/>
+
+ <g aria-label="앱에서 얻는 정보와 활용 목적">
+  <rect x="64" y="782" width="350" height="172" rx="17" fill="#effafd" stroke="#cce9ef"/>
+  <text x="86" y="823" class="output-title" fill="#008ca7">참여 현황</text>
+  <text x="86" y="861" class="output-body">부스별·존별 인증 참여 집계</text>
+  <text x="86" y="902" class="output-goal">→ 참여가 모이는 곳 파악</text>
+  <text x="86" y="931" class="small muted">배치·프로그램 개선의 근거</text>
+
+  <rect x="438" y="782" width="350" height="172" rx="17" fill="#f3f5ff" stroke="#dce1f7"/>
+  <text x="460" y="823" class="output-title" fill="#3355ae">만족도·참여 반응</text>
+  <text x="460" y="861" class="output-body">선택 별점·설문·미션 달성</text>
+  <text x="460" y="902" class="output-goal">→ 체험 콘텐츠 개선</text>
+  <text x="460" y="931" class="small muted">참가자의 반응과 의견 확인</text>
+
+  <rect x="812" y="782" width="350" height="172" rx="17" fill="#fff4f9" stroke="#f1dce7"/>
+  <text x="834" y="823" class="output-title" fill="#c13679">운영 대응 기록</text>
+  <text x="834" y="861" class="output-body">문의 유형·처리·알림 확인</text>
+  <text x="834" y="902" class="output-goal">→ 반복 문제·지원 수요 파악</text>
+  <text x="834" y="931" class="small muted">운영 지원과 업무 분류 개선</text>
+
+  <rect x="1186" y="782" width="350" height="172" rx="17" fill="#f1faf6" stroke="#d1eade"/>
+  <text x="1208" y="823" class="output-title" fill="#248366">성과 분석 기반</text>
+  <text x="1208" y="861" class="output-body">이동·사용량·지출 설문 자료</text>
+  <text x="1208" y="902" class="output-goal">→ 결과 보고·후속 분석</text>
+  <text x="1208" y="931" class="small muted">탄소·지역경제 분석의 기초 자료</text>
+ </g>
+
+ <text x="800" y="1004" text-anchor="middle" font-size="26" font-weight="800">편리한 참여 <tspan fill="#009bb8">＋</tspan> 효율적인 운영 <tspan fill="#009bb8">＋</tspan> 근거 있는 다음 행사</text>
+ <line x1="64" y1="1032" x2="1536" y2="1032" stroke="#dce5ef"/>
+ <text x="64" y="1062" class="small muted">집계 기준　인증 참여 ≠ 현재 체류 인원　·　존 참여 합계에는 부스 간 중복 포함</text>
+ <text x="64" y="1092" class="small muted">분석 범위　탄소 절감·사회적 비용·지역경제 효과는 기준·계수 검증 후 산정합니다. 현재는 원자료·기초 집계를 제공합니다.</text>
+ <text x="1536" y="1062" text-anchor="end" class="small muted">초기 참가 정보 입력 최소화 · 추첨 연락처는 설문에서 수집</text>
+</svg>
