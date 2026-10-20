@@ -134,7 +134,7 @@ def initialize(seed=True):
 
 
 def default_settings():
-    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','key_visual':theme_config.defaults(),'building_maps':[], 'outdoor_map':map_config.outdoor_map({}), 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'weather':{'enabled':False,'locations':[]},'features':{'missions':True,'survey':True,'programs':True},'sample':False}
+    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','key_visual':theme_config.defaults(),'building_maps':[], 'outdoor_map':map_config.outdoor_map({}), 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'weather':{'enabled':False,'locations':[]},'features':{'missions':True,'survey':True,'programs':True},'sample':False,'header_name':'','show_sample_notice':True}
 
 
 def seed_demo(db):
@@ -398,7 +398,12 @@ class Handler(BaseHTTPRequestHandler):
             if not b or not verify(text(d.get('password',''),200),b['password']): raise ApiError(401,'관리 코드 또는 비밀번호를 확인하세요.')
             return {'token':self.session(db,booth=b['id'],display=text(d.get('display','담당자'),60)),'event':b['event'],'booth':b['id']}
         if path=='/api/events' and method=='GET':
-            return [dict(r) for r in db.execute('SELECT id,name,description,venue,start,end,status FROM events WHERE status!="draft" ORDER BY created DESC')]
+            events=[dict(r) for r in db.execute('SELECT id,name,description,venue,start,end,status FROM events WHERE status!="draft" ORDER BY created DESC')]
+            if q.get('lang',['ko'])[0]=='en':
+                for event in events:
+                    get=translations.translator(db,event['id'])
+                    for field in ['name','description','venue']:event[field]=get('event',event['id'],field,event[field])
+            return events
         if path=='/api/events' and method=='POST':
             s=self.admin(db,'*',['owner']);eid=uid();settings=default_settings()
             source=d.get('copy')
@@ -460,13 +465,14 @@ class Handler(BaseHTTPRequestHandler):
             index=integer(int(q.get('location',['0'])[0]),0,max(0,len(locations)-1))
             loc=locations[index]
             result=integrations.weather(loc['nx'],loc['ny'])
-            return {**result,'location':loc,'locations':[{'name':x['name']} for x in locations],'warning_url':'https://www.weather.go.kr/w/weather/warning/status.do'}
+            payload={**result,'location':loc,'locations':[{'name':x['name']} for x in locations],'warning_url':'https://www.weather.go.kr/w/weather/warning/status.do'}
+            return translations.weather_payload(db,e,payload,index) if q.get('lang',['ko'])[0]=='en' else payload
         if route=='' and method=='GET':
             if ev['status']=='draft': self.admin(db,e)
             zones=[dict(r) for r in db.execute('SELECT * FROM zones WHERE event=?',(e,))]
             booths=[b for b in booth_stats(db,e) if b['approved']]
             # Strip all administrative/contact/certification secrets from public payloads.
-            payload={'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','key_visual','sample','building_maps','outdoor_map','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
+            payload={'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','key_visual','sample','header_name','show_sample_notice','building_maps','outdoor_map','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
             return translations.public_payload(db,e,payload) if q.get('lang',['ko'])[0]=='en' else payload
         if route=='pass' and method in ['GET','POST']:
             get_event(db,e,True);p,token=self.participant(db,e,method=='POST')
@@ -684,6 +690,10 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as error: raise ApiError(400,str(error))
             if 'entry_end' in d: settings['entry_end']=date_value(d['entry_end'])
             if 'safety_phone' in d: settings['safety_phone']=text(d['safety_phone'],40,False)
+            if 'header_name' in d: settings['header_name']=text(d['header_name'],100,False)
+            if 'show_sample_notice' in d:
+                if type(d['show_sample_notice']) is not bool: raise ApiError(400,'샘플 문구 표시 여부를 확인하세요.')
+                settings['show_sample_notice']=d['show_sample_notice']
             if 'reporting_enabled' in d: settings['reporting_enabled']=bool(d['reporting_enabled'])
             for k in ['primary','accent']:
                 if k in d:

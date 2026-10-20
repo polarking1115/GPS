@@ -20,3 +20,5 @@
 @media(max-width:800px){.kv-editor-grid{grid-template-columns:minmax(0,1fr)}.kv-preview-pane{position:relative;order:-1}.kv-save-row{bottom:-20px}.kv-preview-pane .section-head h3{font-size:16px}}
 
 .hero.kv-hero h1,.kv-slogan{word-break:keep-all}.kv-preview-pane button{white-space:nowrap;flex-shrink:0}.kv-preview-pane>.section-head .actions{flex-wrap:nowrap}#kv-preview-viewport{background:transparent}
+/* Organizer-defined header names may be longer than the original demo label. */
+.app-header{height:auto;min-height:62px}.app-header strong{min-width:0;flex:1;overflow-wrap:anywhere}.app-header .tools{flex-shrink:0}

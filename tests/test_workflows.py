@@ -247,4 +247,35 @@ class Workflows(unittest.TestCase):
         copied=self.admin.ok('/api/events','POST',{'name':'Copied visual','copy':self.event})['id']
         self.assertEqual(self.admin.ok(self.e('admin',copied))['event']['settings']['key_visual'],result)
 
+    def test_17_display_settings_and_reviewed_map_quiz_labels(self):
+        e=self.admin.ok('/api/events','POST',{'name':'제23회 테스트'})['id']
+        settings={'status':'public','header_name':'상단 이름','show_sample_notice':False,
+                  'maps':[{'name':'실내 건물','image':'/assets/youth-hero.png'}],
+                  'outdoor':{'nodes':[{'id':'gate','name':'정문','lat':34.7523,'lng':127.7468}],'edges':[]}}
+        self.admin.ok(self.e('settings',e),'POST',settings)
+        for bad in ['false',0,None]:
+            self.assertEqual(self.admin.call(self.e('settings',e),'POST',{'show_sample_notice':bad})[0],400)
+        self.assertEqual(Client().call(self.e('settings',e),'POST',{'header_name':'changed'})[0],401)
+        mission=self.admin.ok(self.e('mission',e),'POST',{'title':'퀴즈','kind':'quiz','question':'공개 질문','answer':'private-canonical-answer','published':True})
+        listing=self.admin.ok(self.e('translations',e))['items']
+        self.assertNotIn('private-canonical-answer',json.dumps(listing))
+        selected=[{**x,'translation':{'setting':'App title','building':'Indoor hall','node':'Main gate','mission':'Reviewed question'}[x['kind']],'reviewed':True}
+                  for x in listing if x['kind'] in ['setting','building','node'] or x['kind']=='mission' and x['field']=='question']
+        self.assertEqual(len(selected),4)
+        self.admin.ok(self.e('translations/review',e),'POST',{'items':selected})
+        data=Client().ok('/api/events/'+e+'?lang=en')
+        self.assertEqual(data['event']['name'],'제23회 테스트')
+        self.assertEqual(data['theme']['header_name'],'App title')
+        self.assertFalse(data['theme']['show_sample_notice'])
+        self.assertEqual(data['theme']['building_maps'][0]['name'],'실내 건물')
+        self.assertEqual(data['theme']['building_maps'][0]['label'],'Indoor hall')
+        self.assertEqual(data['theme']['outdoor_nodes'][0]['name'],'정문')
+        self.assertEqual(data['theme']['outdoor_nodes'][0]['label'],'Main gate')
+        missions=Client().ok(self.e('pass',e)+'?lang=en')['missions']
+        quiz=next(m for m in missions if m['id']==mission['id'])
+        self.assertEqual(quiz['question'],'Reviewed question')
+        self.assertNotIn('private-canonical-answer',json.dumps(quiz))
+        self.admin.ok(self.e('settings',e),'POST',{'header_name':'원문 변경'})
+        self.assertEqual(Client().ok('/api/events/'+e+'?lang=en')['theme']['header_name'],'원문 변경')
+
 if __name__=='__main__': unittest.main(verbosity=2)
