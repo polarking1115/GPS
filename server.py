@@ -26,6 +26,7 @@ import qrcode.image.svg
 import map_config
 import integrations
 import translations
+import theme_config
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('FESTIVAL_DATA', ROOT / '.data')).resolve()
@@ -133,7 +134,7 @@ def initialize(seed=True):
 
 
 def default_settings():
-    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','building_maps':[], 'outdoor_map':map_config.outdoor_map({}), 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'weather':{'enabled':False,'locations':[]},'features':{'missions':True,'survey':True,'programs':True},'sample':False}
+    return {'survey_gate':'all','entry_gate':'missions','required_missions':1,'survey_end':'','entry_end':'','primary':'#123b9b','accent':'#00a3c4','hero':'/assets/youth-hero.png','key_visual':theme_config.defaults(),'building_maps':[], 'outdoor_map':map_config.outdoor_map({}), 'outdoor_nodes':[], 'outdoor_edges':[], 'carbon_factors':{},'local_area':'','safety_phone':'','reporting_enabled':False,'weather':{'enabled':False,'locations':[]},'features':{'missions':True,'survey':True,'programs':True},'sample':False}
 
 
 def seed_demo(db):
@@ -465,7 +466,7 @@ class Handler(BaseHTTPRequestHandler):
             zones=[dict(r) for r in db.execute('SELECT * FROM zones WHERE event=?',(e,))]
             booths=[b for b in booth_stats(db,e) if b['approved']]
             # Strip all administrative/contact/certification secrets from public payloads.
-            payload={'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','sample','building_maps','outdoor_map','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
+            payload={'event':{k:ev[k] for k in ['id','name','description','venue','start','end','status']},'theme':{k:ev['settings'].get(k) for k in ['primary','accent','hero','key_visual','sample','building_maps','outdoor_map','outdoor_nodes','outdoor_edges','safety_phone','reporting_enabled','features']},'zones':zones,'booths':[{k:b[k] for k in ['id','zone','name','organization','description','code','building','x','y','lat','lng','status','zone_name','zone_color']} for b in booths],'programs':[dict(r) for r in db.execute('SELECT * FROM programs WHERE event=? ORDER BY date,time',(e,))],'notices':[dict(r) for r in db.execute('SELECT id,title,body,severity,created FROM notices WHERE event=? AND target="public" ORDER BY created DESC',(e,))]}
             return translations.public_payload(db,e,payload) if q.get('lang',['ko'])[0]=='en' else payload
         if route=='pass' and method in ['GET','POST']:
             get_event(db,e,True);p,token=self.participant(db,e,method=='POST')
@@ -688,6 +689,9 @@ class Handler(BaseHTTPRequestHandler):
                 if k in d:
                     if not re.fullmatch(r'#[0-9a-fA-F]{6}',d[k]): raise ApiError(400,'색상 형식을 확인하세요.')
                     settings[k]=d[k]
+            if 'key_visual' in d:
+                try: settings['key_visual']=theme_config.validate(d['key_visual'],settings.get('key_visual'))
+                except ValueError as error: raise ApiError(400,str(error))
             if 'hero' in d:
                 if not re.fullmatch(r'/assets/[\w.-]+',d['hero']): raise ApiError(400,'등록한 이미지 경로를 사용하세요.')
                 settings['hero']=d['hero']

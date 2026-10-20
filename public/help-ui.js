@@ -46,6 +46,9 @@ window.HelpUI=(()=>{
   'map-editor':['건물 통합 평면도를 등록하고 부스를 배치합니다. 야외 지도 편집에서는 배치도·보행로·건물 진입 범위를 설정합니다.','Upload combined indoor plans, place booths, and edit outdoor overlays, paths and building entrances.'],
   'outdoor-editor':['야외 배경·배치도·통로·실내 전환 범위를 편집합니다. 공개 적용 전 실제 장소와 위치를 확인하세요.','Edit outdoor overlays, paths and indoor transition boundaries. Check them against the actual venue before publishing.'],
   'services-settings':['날씨 기준 지역과 서버 연결 상태를 확인합니다. 행사 총괄 권한으로 날씨 지역을 저장할 수 있습니다.','Review provider connections and weather locations. Event owners can save location settings.'],
+  'visual-editor':['앱 배경과 원본 포스터를 나누고 글자·필터·배치를 조절합니다. 모바일·PC 미리보기 후 적용해야 공개 화면에 저장됩니다.','Adjust artwork, poster, typography, filters and positioning. Preview mobile and desktop layouts before applying.'],
+  'visual-device':['모바일 또는 PC에서 보이는 홈 화면을 미리 봅니다. 이 버튼만으로 설정이 저장되지는 않습니다.','Preview the mobile or desktop home screen without saving changes.'],
+  'visual-readable':['선택한 단색 바탕을 기준으로 대비가 높은 남색 또는 흰색 글자를 추천합니다. 이미지 위에서는 실제 미리보기도 확인하세요.','Choose navy or white text for contrast with the selected solid surface; also check the actual image preview.'],
   'weather-refresh':['날씨를 다시 조회합니다. 관측 시각을 확인하세요. 기상청 발표와 서버 캐시 주기에 따라 수치는 유지될 수 있습니다.','Request weather again and check its observation time. Provider publication and caching may retain the same reading.'],
   'translations-open':['영어 초안을 작성·검토하고 공개합니다. 검토한 최신 원문의 번역만 참가자에게 표시합니다.','Write and review English drafts. Only approved translations matching the current source are published.'],
   'translations-generate':['공개 문구의 번역 초안을 생성합니다. 서버 번역 키가 필요하며 API 비용이 발생할 수 있습니다.','Generate translation drafts for public content. A server key is required and API charges may apply.'],
@@ -102,7 +105,7 @@ window.HelpUI=(()=>{
    ]){const el=root.querySelector(selector);if(visible(el))result.push({el,title:tr(title,englishTitle),body:tr(body,englishBody)});}
   }
   for(const el of root.querySelectorAll('input:not([type="hidden"]),textarea,select,button,a[href]')){
-   if(!visible(el)||el.matches('[data-help-start]')||el.closest('.sidebar-nav,.staff-nav,nav[aria-label="참가자 메뉴"],.leaflet-control-container')||el.dataset.action==='close')continue;
+   if(!visible(el)||el.matches('[data-help-start]')||el.closest('.sidebar-nav,.staff-nav,nav[aria-label="참가자 메뉴"],.leaflet-control-container,#kv-preview-stage')||el.dataset.action==='close')continue;
    const action=el.dataset.action||'',prefix=action.split(':')[0],name=label(el),field=el.id||el.name;
    const key=el.matches('input,textarea,select')?'field:'+((el.name||field).startsWith('q_')?'survey-question':el.name||field):'button:'+(action?prefix+(['nav','staff-nav','load-reports','report','zoom','program-date'].includes(prefix)?':'+action.split(':')[1]:''):name);
    if(seen.has(key))continue;seen.add(key);
@@ -143,7 +146,7 @@ window.HelpUI=(()=>{
   tour={layer,steps:all,index:0,key:context(),focus:document.activeElement,overflow:document.body.style.overflow,background,spot:layer.querySelector('.tour-spot'),panel:layer.querySelector('.tour-panel'),counter:layer.querySelector('.tour-counter'),title:layer.querySelector('h2'),body:layer.querySelector('.tour-copy'),previous:layer.querySelector('.tour-previous'),next:layer.querySelector('.tour-next')};
   for(const [el] of background)el.inert=true;document.body.style.overflow='hidden';document.body.append(layer);
   const exit=layer.querySelector('.tour-exit');exit.textContent=tr('안내 닫기','Close tour');exit.onclick=stop;tour.previous.textContent=tr('이전','Back');tour.previous.onclick=()=>show(tour.index-1);tour.next.onclick=()=>tour.index===tour.steps.length-1?stop():show(tour.index+1);
-  layer.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();stop();return}if(event.key==='Tab'){const buttons=[...layer.querySelectorAll('button:not(:disabled)')];const current=buttons.indexOf(document.activeElement);event.preventDefault();buttons[(current+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus()}if(event.key==='ArrowRight'){event.preventDefault();if(tour.index<tour.steps.length-1)show(tour.index+1)}if(event.key==='ArrowLeft'){event.preventDefault();show(tour.index-1)}});
+  layer.addEventListener('keydown',event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();stop();return}if(event.key==='Tab'){const buttons=[...layer.querySelectorAll('button:not(:disabled)')];const current=buttons.indexOf(document.activeElement);event.preventDefault();buttons[(current+(event.shiftKey?-1:1)+buttons.length)%buttons.length].focus()}if(event.key==='ArrowRight'){event.preventDefault();if(tour.index<tour.steps.length-1)show(tour.index+1)}if(event.key==='ArrowLeft'){event.preventDefault();show(tour.index-1)}});
   window.addEventListener('resize',position);document.addEventListener('scroll',position,true);show(0);
  }
  document.addEventListener('click',event=>{if(event.target.closest('[data-help-start]')){event.preventDefault();event.stopImmediatePropagation();start()}},true);

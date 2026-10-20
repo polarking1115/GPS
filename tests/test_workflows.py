@@ -232,4 +232,19 @@ class Workflows(unittest.TestCase):
         staff=Client();staff.token=staff.ok('/api/booth-login','POST',{'manager':access['manager'],'password':'weather-staff-password','display':'Staff'})['token']
         self.assertEqual(staff.call(self.e('admin-weather'))[0],403)
 
+    def test_16_key_visual_validation_permissions_and_copy(self):
+        preferences={'layout':'background','show_title':False,'show_slogan':True,'title_size':40,'align':'right','text_color':'#ffffff','surface_color':'#102b55','overlay_tone':'dark','overlay_opacity':65,'position_x':80,'position_y':25,'zoom':140,'fit':'cover','poster':'/assets/youth-hero.png'}
+        self.assertEqual(Client().call(self.e('settings'),'POST',{'key_visual':preferences})[0],401)
+        editor=Client();editor.token=editor.ok('/api/login','POST',{'email':'content@example.test','password':'another-strong-password'})['token']
+        self.assertEqual(editor.call(self.e('settings'),'POST',{'key_visual':preferences})[0],403)
+        self.admin.ok(self.e('settings'),'POST',{'key_visual':preferences})
+        self.assertEqual(Client().ok('/api/events/youth-expo')['theme']['key_visual'],preferences)
+        for bad in [{'layout':'unsafe'}, {'show_title':'false'}, {'show_slogan':0}, {'title_size':True}, {'zoom':201}, {'position_x':-1}, {'position_y':1.5}, {'overlay_opacity':81}, {'text_color':'red;display:none'}, {'poster':'https://example.test/poster.png'}, {'poster':'/assets/../../secret.png'}, {'custom_css':'body{}'}]:
+            self.assertEqual(self.admin.call(self.e('settings'),'POST',{'key_visual':bad})[0],400,bad)
+            self.assertEqual(Client().ok('/api/events/youth-expo')['theme']['key_visual'],preferences)
+        self.admin.ok(self.e('settings'),'POST',{'key_visual':{'layout':'split'}})
+        result=Client().ok('/api/events/youth-expo')['theme']['key_visual'];self.assertEqual(result['layout'],'split');self.assertEqual(result['zoom'],140)
+        copied=self.admin.ok('/api/events','POST',{'name':'Copied visual','copy':self.event})['id']
+        self.assertEqual(self.admin.ok(self.e('admin',copied))['event']['settings']['key_visual'],result)
+
 if __name__=='__main__': unittest.main(verbosity=2)
