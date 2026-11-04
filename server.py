@@ -149,7 +149,7 @@ def default_settings():
 
 
 def seed_demo(db):
-    settings=default_settings(); settings.update(sample=True,hero='/assets/youth-hero.png',entry_gate='missions')
+    settings=default_settings(); settings.update(sample=True,hero='/assets/youth-hero.png',entry_gate='missions',key_visual=theme_config.background_defaults())
     db.execute('INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?)',('youth-expo','제22회 대한민국 청소년박람회','청소년의 힘으로, 더 푸른 미래를!','여수엑스포컨벤션센터',day(),day(),'active',pack(settings),now()))
     for zid,name,color in [('future','미래기술존','#00a3c4'),('eco','환경·지속가능존','#3bb57e'),('culture','문화예술존','#f3488a')]:
         db.execute('INSERT INTO zones VALUES(?,?,?,?,?)',(zid,'youth-expo',name,color,''))

@@ -1,16 +1,19 @@
 /* Event artwork controls. Preview is local until the organizer explicitly saves. */
 window.ThemeUI=(()=>{
  const defaults=()=>({layout:'split',show_title:true,show_slogan:true,title_size:32,align:'left',text_color:'#102b55',surface_color:'#fffcf5',overlay_tone:'none',overlay_opacity:35,position_x:50,position_y:50,zoom:100,fit:'contain',poster:''});
+ const backgroundDefaults=()=>({...defaults(),layout:'background',title_size:35,text_color:'#ffffff',surface_color:'#00a3c4',fit:'cover'});
  const choices={layout:['split','background','poster'],align:['left','center','right'],overlay_tone:['none','light','dark'],fit:['contain','cover']};
  const limits={title_size:[20,48],overlay_opacity:[0,80],position_x:[0,100],position_y:[0,100],zoom:[100,200]};
  let draft=null;
  const asset=value=>typeof value==='string'&&/^\/assets\/[\w.-]+$/.test(value);
- function config(theme={}){const d=defaults(),source=theme.key_visual||{};for(const key of Object.keys(d)){const v=source[key];if(key in choices&&choices[key].includes(v))d[key]=v;else if(key in limits&&Number.isFinite(v))d[key]=Math.round(Math.min(limits[key][1],Math.max(limits[key][0],v)));else if(['show_title','show_slogan'].includes(key)&&typeof v==='boolean')d[key]=v;else if(['text_color','surface_color'].includes(key)&&/^#[a-f0-9]{6}$/i.test(v||''))d[key]=v;else if(key==='poster'&&asset(v))d[key]=v}return d}
+ function config(theme={}){const d=asset(theme.hero)&&!theme.key_visual?backgroundDefaults():defaults(),source=theme.key_visual||{};for(const key of Object.keys(d)){const v=source[key];if(key in choices&&choices[key].includes(v))d[key]=v;else if(key in limits&&Number.isFinite(v))d[key]=Math.round(Math.min(limits[key][1],Math.max(limits[key][0],v)));else if(['show_title','show_slogan'].includes(key)&&typeof v==='boolean')d[key]=v;else if(['text_color','surface_color'].includes(key)&&/^#[a-f0-9]{6}$/i.test(v||''))d[key]=v;else if(key==='poster'&&asset(v))d[key]=v}return d}
  function hero(event,theme={},preview={}){
   const c=config(theme),background=preview.background||(asset(theme.hero)?theme.hero:''),poster=preview.poster||c.poster||background;
   if(c.layout==='poster'&&!poster)c.layout='split';
-  const style=`--kv-text:${c.text_color};--kv-surface:${c.surface_color};--kv-title:${c.title_size}px;--kv-align:${c.align};--kv-x:${c.position_x}%;--kv-y:${c.position_y}%;--kv-zoom:${c.zoom/100};--kv-fit:${c.fit};--kv-filter:${c.overlay_opacity/100}`;
-  const title=`<h1${c.show_title?'':' class="kv-sr-only"'}>${esc(event.name)}</h1>`;
+  const style=`--kv-text:${c.text_color};--kv-surface:${c.surface_color};--kv-title:${c.title_size}px;--kv-align:${c.align};--kv-items:${{left:'flex-start',center:'center',right:'flex-end'}[c.align]};--kv-x:${c.position_x}%;--kv-y:${c.position_y}%;--kv-zoom:${c.zoom/100};--kv-fit:${c.fit};--kv-filter:${c.overlay_opacity/100}`;
+  const edition=c.layout==='background'&&String(event.name||'').match(/^((?:제)?[0-9]+회|[0-9]+(?:st|nd|rd|th))\s+/);
+  const titleText=edition?`<span class="kv-edition">${esc(edition[0])}</span><span>${esc(event.name.slice(edition[0].length))}</span>`:esc(event.name);
+  const title=`<h1${c.show_title?'':' class="kv-sr-only"'}>${titleText}</h1>`;
   const copy=`<div class="kv-copy">${title}${c.show_slogan&&event.description?`<p class="kv-slogan">${esc(event.description)}</p>`:''}<p class="kv-meta">${esc(event.start)}${event.end&&event.end!==event.start?' — '+esc(event.end):''}<br>${esc(event.venue)}</p></div>`;
   const media=background?`<div class="kv-media"><img class="kv-art" src="${esc(background)}" alt=""${preview.enabled?'':' fetchpriority="high"'}><div class="kv-filter kv-filter-${c.overlay_tone}"></div></div>`:'';
   const posterLink=!preview.enabled&&c.poster?`<div class="kv-poster-link">${button(t('행사 포스터 보기'),'visual-poster','text-btn')}</div>`:'';
@@ -49,7 +52,7 @@ window.ThemeUI=(()=>{
  async function action(a){if(a==='visual-editor'){open();return true}if(a==='visual-poster'){const c=config(S.data.theme),src=c.poster||S.data.theme.hero;modal(t('행사 포스터'),`<img class="kv-original" src="${esc(src)}" alt="${esc(S.data.event.name)} ${esc(t('행사 포스터'))}">`);return true}if(!a.startsWith('visual-'))return false;if(!draft)return true;
   if(a.startsWith('visual-device:')){draft.device=a.endsWith('desktop')?'desktop':'mobile';update()}
   if(a==='visual-readable'){const c=read($('form[data-form="key-visual"]'));$('#f-text_color').value=contrast('#102b55',c.surface_color)>=contrast('#ffffff',c.surface_color)?'#102b55':'#ffffff';update()}
-  if(a==='visual-defaults'){const values=defaults(),form=$('form[data-form="key-visual"]');for(const [key,value] of Object.entries(values)){const input=form.elements.namedItem(key);if(!input)continue;if(input.type==='checkbox')input.checked=value;else input.value=value}update()}
+  if(a==='visual-defaults'){const values=draft.hero||draft.backgroundURL?backgroundDefaults():defaults(),form=$('form[data-form="key-visual"]');for(const [key,value] of Object.entries(values)){const input=form.elements.namedItem(key);if(!input)continue;if(input.type==='checkbox')input.checked=value;else input.value=value}update()}
   if(a==='visual-clear-poster'){if(draft.posterURL)URL.revokeObjectURL(draft.posterURL);draft.posterURL=null;draft.posterFile=null;draft.config.poster='';draft.versions.poster++;$('#kv-poster').value='';$('#kv-poster-label').textContent='원본 포스터를 해제했습니다. 적용하면 저장됩니다.';update()}
   return true;
  }

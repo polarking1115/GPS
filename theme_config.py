@@ -10,6 +10,12 @@ def defaults():
             'zoom': 100, 'fit': 'contain', 'poster': ''}
 
 
+def background_defaults():
+    """The original artwork-led banner, with editable copy above the image."""
+    return {**defaults(), 'layout': 'background', 'title_size': 35,
+            'text_color': '#ffffff', 'surface_color': '#00a3c4', 'fit': 'cover'}
+
+
 def validate(value, previous=None):
     result = defaults()
     if isinstance(previous, dict):
