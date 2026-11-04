@@ -59,9 +59,22 @@ class Workflows(unittest.TestCase):
         for b in public['booths']:
             for key in ['password','manager','qr','contact']: self.assertNotIn(key,b)
         self.assertEqual(Client().call(self.e('admin'))[0],401)
+    def test_01_seed_english_and_review_preservation(self):
+        english=Client().ok('/api/events/youth-expo?lang=en')
+        self.assertEqual(english['event']['name'],'22nd Korea Youth Expo')
+        self.assertEqual(english['translation']['missing'],0)
+        self.assertNotIn('샘플',english['notices'][0]['body'])
+        self.assertEqual(Client().ok(self.e('pass')+'?lang=en')['missions'][0]['title'],'Booth Explorer')
+        # Starting again must not replace a reviewed translation written by the owner.
+        source=next(x for x in self.admin.ok(self.e('translations'))['items'] if x['kind']=='event' and x['field']=='name')
+        self.admin.ok(self.e('translations/review'),'POST',{'items':[{**source,'translation':'Organizer title','reviewed':True}]})
+        app.initialize()
+        self.assertEqual(Client().ok('/api/events/youth-expo?lang=en')['event']['name'],'Organizer title')
+        self.admin.ok(self.e('translations/review'),'POST',{'items':[{**source,'translation':'22nd Korea Youth Expo','reviewed':True}]})
+
     def test_02_auth_and_invite_scope(self):
         event2=self.admin.ok('/api/events','POST',{'name':'Other event'})['id']
-        self.admin.ok(self.e('settings',event2),'POST',{'status':'public'})
+        self.admin.ok(self.e('settings',event2),'POST',{'status':'public','venue':'Test hall','start':app.day(),'end':app.day()})
         invite=self.admin.ok(self.e('invite'),'POST',{'email':'content@example.test','role':'content'})['invite']
         c=Client();c.ok('/api/accept-invite','POST',{'invite':invite,'name':'Editor','password':'another-strong-password'})
         self.assertEqual(c.call('/api/accept-invite','POST',{'invite':invite,'name':'Editor','password':'another-strong-password'})[0],400)
@@ -132,7 +145,7 @@ class Workflows(unittest.TestCase):
     def test_08_sensitive_report_privileges(self):
         p=self.participant();payload={'kind':'camera','location':'Building','body':'A suspicious device'}
         self.assertEqual(p.call(self.e('report'),'POST',payload)[0],409)
-        self.admin.ok(self.e('settings'),'POST',{'reporting_enabled':True})
+        self.admin.ok(self.e('settings'),'POST',{'reporting_enabled':True,'safety_phone':'02-000-0000'})
         rid=p.ok(self.e('report'),'POST',payload)['id'];self.assertEqual(self.admin.call(self.e('reports')+'?sensitive=1')[0],403)
         i=self.admin.ok(self.e('invite'),'POST',{'email':'support@example.test','role':'support'})['invite']
         c=Client();c.ok('/api/accept-invite','POST',{'invite':i,'name':'Support','password':'support-test-password'});c.token=c.ok('/api/login','POST',{'email':'support@example.test','password':'support-test-password'})['token']
@@ -249,7 +262,7 @@ class Workflows(unittest.TestCase):
 
     def test_17_display_settings_and_reviewed_map_quiz_labels(self):
         e=self.admin.ok('/api/events','POST',{'name':'제23회 테스트'})['id']
-        settings={'status':'public','header_name':'상단 이름','show_sample_notice':False,
+        settings={'status':'public','venue':'Test hall','start':app.day(),'end':app.day(),'header_name':'상단 이름','show_sample_notice':False,
                   'maps':[{'name':'실내 건물','image':'/assets/youth-hero.png'}],
                   'outdoor':{'nodes':[{'id':'gate','name':'정문','lat':34.7523,'lng':127.7468}],'edges':[]}}
         self.admin.ok(self.e('settings',e),'POST',settings)
@@ -277,5 +290,200 @@ class Workflows(unittest.TestCase):
         self.assertNotIn('private-canonical-answer',json.dumps(quiz))
         self.admin.ok(self.e('settings',e),'POST',{'header_name':'원문 변경'})
         self.assertEqual(Client().ok('/api/events/'+e+'?lang=en')['theme']['header_name'],'원문 변경')
+
+    def new_event(self, **settings):
+        e=self.admin.ok('/api/events','POST',{'name':'독립 검토 행사','venue':'Test hall','start':app.day(),'end':app.day()})['id']
+        self.admin.ok(self.e('settings',e),'POST',{'status':'active','safety_phone':'02-000-0000',**settings})
+        return e
+
+    def test_18_multiple_event_passes_keep_legacy_records(self):
+        first,second=self.new_event(),self.new_event()
+        p=Client();a=p.ok(self.e('pass',first),'POST',{})['participant']['id']
+        # Simulate a pass made before event-scoped token storage.
+        jar=next(h.cookiejar for h in p.http.handlers if isinstance(h,HTTPCookieProcessor))
+        token=next(c.value for c in jar if c.name=='festival_pass')
+        with app.connect() as db: db.execute('UPDATE participants SET token=? WHERE id=?',(app.digest(token),a))
+        b=p.ok(self.e('pass',second),'POST',{})['participant']['id']
+        self.assertNotEqual(a,b)
+        for e,pid in [(first,a),(second,b),(first,a)]:
+            self.assertEqual(p.ok(self.e('pass',e),'POST',{})['participant']['id'],pid)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            ids=list(pool.map(lambda _:p.ok(self.e('pass',second),'POST',{})['participant']['id'],range(4)))
+        self.assertEqual(set(ids),{b})
+
+    def test_19_features_gate_public_routes_without_erasing_data(self):
+        e=self.new_event();p=Client();p.ok(self.e('pass',e),'POST',{})
+        mission=self.admin.ok(self.e('mission',e),'POST',{'title':'Quiz','kind':'quiz','question':'Q','answer':'A'})['id']
+        self.admin.ok(self.e('program',e),'POST',{'title':'Program','date':app.day(),'time':'12:00','place':'Hall'})
+        self.admin.ok(self.e('settings',e),'POST',{'entry_gate':'missions'})
+        self.assertEqual(self.admin.call(self.e('settings',e),'POST',{'features':{'missions':False}})[0],400)
+        self.assertTrue(self.admin.ok(self.e('admin',e))['event']['settings']['features']['missions'])
+        self.assertEqual(self.admin.call(self.e('settings',e),'POST',{'features':{'missions':'false'}})[0],400)
+        self.admin.ok(self.e('settings',e),'POST',{'entry_gate':'all','features':{'missions':False,'programs':False,'survey':False}})
+        self.assertEqual(p.ok('/api/events/'+e)['programs'],[])
+        self.assertEqual(p.ok(self.e('pass',e))['missions'],[])
+        self.assertEqual(p.ok(self.e('survey',e)),{'survey':None})
+        self.assertEqual(p.call(self.e('mission-answer',e),'POST',{'mission':mission,'answer':'A'})[0],409)
+        self.assertEqual(p.call(self.e('survey',e),'POST',{})[0],409)
+        saved=self.admin.ok(self.e('admin',e));self.assertEqual(len(saved['missions']),1);self.assertEqual(len(saved['programs']),1)
+        self.assertEqual(saved['event']['settings']['hero'],'')
+        self.admin.ok(self.e('settings',e),'POST',{'features':{'missions':True,'programs':True}})
+        self.assertEqual(len(p.ok(self.e('pass',e))['missions']),1)
+
+    def test_20_copied_missions_can_be_published_with_event_scope(self):
+        source=self.new_event()
+        self.admin.ok(self.e('mission',source),'POST',{'title':'Copy me','kind':'booths','target':1})
+        copied=self.admin.ok('/api/events','POST',{'name':'Copied','copy':source})['id']
+        self.admin.ok(self.e('settings',copied),'POST',{'status':'active','venue':'Test hall','start':app.day(),'end':app.day()})
+        mission=self.admin.ok(self.e('admin',copied))['missions'][0]
+        self.assertFalse(mission['published'])
+        self.assertEqual(self.admin.call(self.e('mission-publication',source),'POST',{'id':mission['id'],'published':True})[0],404)
+        self.admin.ok(self.e('mission-publication',copied),'POST',{'id':mission['id'],'published':True})
+        self.assertEqual(Client().ok(self.e('pass',copied))['missions'][0]['id'],mission['id'])
+
+    def test_21_survey_can_close_after_responses_but_not_change_questions(self):
+        e=self.new_event();config={'title':'Survey','questions':[{'id':'opinion','type':'text','label':'Opinion','required':False}],'consent':'Test consent','published':True,'end':'2099-01-01'}
+        self.admin.ok(self.e('survey-config',e),'POST',config)
+        p=Client();p.ok(self.e('pass',e),'POST',{})
+        p.ok(self.e('survey',e),'POST',{'answers':{'opinion':'Test answer'},'age_group':'14plus','survey_consent':True})
+        self.admin.ok(self.e('survey-config',e),'POST',{**config,'published':False})
+        self.assertEqual(p.ok(self.e('survey',e)),{'survey':None})
+        self.assertEqual(self.admin.call(self.e('survey-config',e),'POST',{**config,'questions':[]})[0],400)
+        self.assertEqual(self.admin.call(self.e('survey-config',e),'POST',{**config,'title':'Changed'})[0],409)
+        self.admin.ok(self.e('survey-config',e),'POST',{**config,'end':'2000-01-01'})
+        self.assertFalse(p.ok(self.e('survey',e))['open'])
+        self.assertTrue(p.ok(self.e('pass',e))['survey']['submitted'])
+
+    def test_22_staff_answers_reload_and_reject_cross_event_booth(self):
+        answers={'transport':'도보','distance_km':0,'staff_count':3,'food':12000}
+        self.admin.ok(self.e('staff-survey'),'POST',{'booth':'booth-1','answers':answers})
+        saved=self.admin.ok(self.e('booth-data')+'?booth=booth-1')['staff_answers']
+        for k,v in answers.items(): self.assertEqual(saved[k],v)
+        other=self.new_event()
+        self.assertEqual(self.admin.call(self.e('staff-survey',other),'POST',{'booth':'booth-1','answers':{}})[0],403)
+        self.assertEqual(self.admin.call(self.e('inquiry',other),'POST',{'booth':'booth-1','category':'운영 문의','title':'Cross event','body':'Must reject'})[0],403)
+        self.assertEqual(self.admin.ok(self.e('booth-data')+'?booth=booth-1')['staff_answers'],saved)
+
+    def test_23_archived_event_public_access_and_report_state(self):
+        e=self.new_event(reporting_enabled=True);p=Client();p.ok(self.e('pass',e),'POST',{})
+        self.admin.ok(self.e('settings',e),'POST',{'status':'ended'})
+        self.assertEqual(p.call(self.e('report',e),'POST',{'kind':'safety','location':'Test','body':'Test'})[0],409)
+        self.admin.ok(self.e('settings',e),'POST',{'status':'archived'})
+        self.assertNotIn(e,[event['id'] for event in p.ok('/api/events')])
+        self.assertEqual(p.call('/api/events/'+e)[0],401)
+        self.assertEqual(p.call(self.e('pass',e))[0],404)
+        self.assertEqual(p.call(self.e('report',e),'POST',{'kind':'safety','location':'Test','body':'Test'})[0],404)
+        self.assertEqual(self.admin.ok(self.e('admin',e))['event']['status'],'archived')
+
+    def test_24_role_data_and_membership_revocation(self):
+        e=self.new_event();email='analyst-cleanup@example.test'
+        invite=self.admin.ok(self.e('invite',e),'POST',{'email':email,'role':'analyst'})['invite']
+        c=Client();c.ok('/api/accept-invite','POST',{'invite':invite,'name':'Analyst','password':'analyst-review-password'})
+        c.token=c.ok('/api/login','POST',{'email':email,'password':'analyst-review-password'})['token']
+        self.admin.ok(self.e('prize',e),'POST',{'name':'Test prize','count':1})
+        payload=c.ok(self.e('admin',e));self.assertEqual(payload['prizes'],[]);self.assertEqual(payload['inquiries'],[])
+        self.assertEqual(c.call(self.e('members',e))[0],403)
+        member=self.admin.ok(self.e('members',e))[0]
+        self.admin.ok(self.e('revoke',e),'POST',{'user':member['id']})
+        self.assertEqual(self.admin.ok(self.e('members',e)),[])
+        self.assertEqual(c.call(self.e('admin',e))[0],401)
+
+    def test_25_program_time_is_a_real_clock_time(self):
+        e=self.new_event();data={'title':'Program','date':app.day(),'place':'Hall'}
+        for time in ['24:00','12:99','99:00']:
+            self.assertEqual(self.admin.call(self.e('program',e),'POST',{**data,'time':time})[0],400)
+        self.admin.ok(self.e('program',e),'POST',{**data,'time':'23:59'})
+
+    def detail(self,e,kind,entity):
+        return self.admin.ok(self.e('content-detail',e)+f'?kind={kind}&id={entity}')
+
+    def test_26_publication_checks_required_fields_and_optional_warnings(self):
+        e=self.admin.ok('/api/events','POST',{'name':'준비 행사'})['id']
+        readiness=self.admin.ok(self.e('readiness',e));self.assertFalse(readiness['can_publish'])
+        self.assertEqual({x['key'] for x in readiness['items'] if x['state']=='blocked'},{'venue','dates'})
+        self.assertEqual(self.admin.call(self.e('settings',e),'POST',{'status':'public'})[0],409)
+        self.assertEqual(self.admin.ok(self.e('admin',e))['event']['status'],'draft')
+        valid={'venue':'온라인 참여 페이지','start':app.day(),'end':app.day(),'status':'public'}
+        self.admin.ok(self.e('settings',e),'POST',valid)
+        readiness=self.admin.ok(self.e('readiness',e));self.assertTrue(readiness['can_publish'])
+        self.assertTrue(any(x['state']=='warning' for x in readiness['items']))
+        self.assertEqual(self.admin.call(self.e('settings',e),'POST',{'reporting_enabled':True})[0],409)
+        self.assertFalse(self.admin.ok(self.e('admin',e))['event']['settings']['reporting_enabled'])
+        self.assertEqual(self.admin.call(self.e('settings',e),'POST',{'start':'2026-11-05','end':'2026-11-04'})[0],400)
+        self.assertEqual(self.admin.call(self.e('settings',e),'POST',{'entry_gate':'missions','required_missions':1})[0],409)
+        m=self.admin.ok(self.e('mission',e),'POST',{'title':'Quiz','kind':'quiz','question':'Q','answer':'A'})['id']
+        self.admin.ok(self.e('settings',e),'POST',{'entry_gate':'missions','required_missions':1})
+        self.assertEqual(self.admin.call(self.e('mission-publication',e),'POST',{'id':m,'published':False})[0],409)
+        self.assertTrue(self.detail(e,'mission',m)['published'])
+
+    def test_27_program_edit_cancel_history_and_conflict(self):
+        e=self.new_event();p=self.admin.ok(self.e('program',e),'POST',{'title':'Program','date':app.day(),'time':'12:00','place':'Hall'})['id']
+        old=self.detail(e,'program',p)
+        self.assertEqual(self.admin.call(self.e('program',e),'POST',{'id':p,'revision':1,'time':'13:00'})[0],400)
+        self.assertEqual(self.detail(e,'program',p)['revision'],1)
+        self.admin.ok(self.e('program',e),'POST',{'id':p,'revision':1,'time':'13:00','change_note':'시작 시간 변경'})
+        self.assertEqual(self.admin.call(self.e('program',e),'POST',{**old,'title':'Stale edit'})[0],409)
+        self.admin.ok(self.e('program',e),'POST',{'id':p,'revision':2,'status':'cancelled','change_note':'기상으로 취소'})
+        public=Client().ok('/api/events/'+e)['programs'][0]
+        self.assertEqual((public['id'],public['status'],public['change_note']),(p,'cancelled','기상으로 취소'))
+        logs=self.admin.ok(self.e('content-history',e)+f'?kind=program&id={p}')
+        self.assertEqual(len(logs),3);self.assertEqual(logs[1]['before']['time'],'12:00');self.assertEqual(logs[1]['after']['time'],'13:00')
+        other=self.new_event()
+        self.assertEqual(self.admin.call(self.e('program',other),'POST',{'id':p,'revision':3,'title':'Cross event'})[0],404)
+        self.assertEqual(Client().call(self.e('content-history',e)+f'?kind=program&id={p}')[0],401)
+        copied=self.admin.ok('/api/events','POST',{'name':'Copy without cancelled program','copy':e})['id']
+        self.assertEqual(self.admin.ok(self.e('admin',copied))['programs'],[])
+        source=next(x for x in self.admin.ok(self.e('translations',e))['items'] if x['kind']=='program' and x['field']=='change_note')
+        self.admin.ok(self.e('translations/review',e),'POST',{'items':[{**source,'translation':'Cancelled due to weather','reviewed':True}]})
+        self.assertEqual(Client().ok('/api/events/'+e+'?lang=en')['programs'][0]['change_note'],'Cancelled due to weather')
+
+    def test_28_mission_draft_edit_lock_and_record_preservation(self):
+        e=self.new_event();z=self.admin.ok(self.e('zone',e),'POST',{'name':'First zone'})['id']
+        self.assertEqual(self.admin.call(self.e('mission',e),'POST',{'title':'Invalid','kind':'zone','refs':[]})[0],400)
+        m=self.admin.ok(self.e('mission',e),'POST',{'title':'Draft','kind':'zone','refs':[z],'published':False})['id']
+        self.admin.ok(self.e('mission',e),'POST',{'id':m,'revision':1,'kind':'quiz','refs':[],'question':'Q','answer':'A','published':True})
+        p=Client();p.ok(self.e('pass',e),'POST',{});p.ok(self.e('mission-answer',e),'POST',{'mission':m,'answer':'A'})
+        self.admin.ok(self.e('mission',e),'POST',{'id':m,'revision':2,'title':'안내 수정'})
+        self.assertTrue(p.ok(self.e('pass',e))['missions'][0]['completed'])
+        for change in [{'answer':'B'},{'start':'2099-01-01'},{'kind':'text'}]:
+            self.assertEqual(self.admin.call(self.e('mission',e),'POST',{'id':m,'revision':3,**change})[0],409)
+        self.admin.ok(self.e('mission-publication',e),'POST',{'id':m,'revision':3,'published':False})
+        self.assertTrue(self.detail(e,'mission',m)['locked'])
+        self.assertEqual(self.admin.call(self.e('mission',e),'POST',{'id':m,'revision':4,'answer':'B'})[0],409)
+        self.admin.ok(self.e('mission-publication',e),'POST',{'id':m,'revision':4,'published':True})
+        self.assertTrue(p.ok(self.e('pass',e))['missions'][0]['completed'])
+        self.assertNotIn('config',p.ok(self.e('pass',e))['missions'][0])
+        self.admin.ok(self.e('zone',e),'POST',{'id':z,'revision':1,'name':'새 존 이름'})
+        self.assertEqual(self.detail(e,'zone',z)['name'],'새 존 이름')
+
+    def test_29_notice_edit_requires_new_ack_and_keeps_old_receipt(self):
+        e=self.event;access=self.admin.ok(self.e('booth-access'),'POST',{'booth':'booth-2','password':'content-notice-password'})
+        staff=Client();staff.token=staff.ok('/api/booth-login','POST',{'manager':access['manager'],'password':'content-notice-password','display':'확인 담당'})['token']
+        n=self.admin.ok(self.e('notice'),'POST',{'title':'안내','body':'이전 내용','target':'booth','refs':['booth-2'],'ack':True})['id']
+        staff.ok(self.e('ack'),'POST',{'booth':'booth-2','notice':n,'revision':1})
+        self.admin.ok(self.e('notice'),'POST',{'id':n,'revision':1,'body':'수정 내용'})
+        self.assertEqual(staff.call(self.e('ack'),'POST',{'booth':'booth-2','notice':n,'revision':1})[0],409)
+        notices=staff.ok(self.e('booth-data')+'?booth=booth-2')['notices'];self.assertIsNone(next(x for x in notices if x['id']==n)['confirmation'])
+        staff.ok(self.e('ack'),'POST',{'booth':'booth-2','notice':n,'revision':2})
+        self.admin.ok(self.e('notice'),'POST',{'id':n,'revision':2,'body':'수정 내용'})  # No-op preserves confirmation.
+        self.assertEqual(self.detail(e,'notice',n)['revision'],2)
+        self.assertEqual(self.admin.call(self.e('notice'),'POST',{'id':n,'revision':2,'refs':['booth-1']})[0],409)
+        logs=self.admin.ok(self.e('content-history')+f'?kind=notice&id={n}')
+        self.assertEqual(logs[0]['before']['acknowledgments'][0]['display'],'확인 담당')
+        self.assertEqual(logs[0]['after']['body'],'수정 내용')
+
+    def test_30_completed_mission_stays_eligible_and_legacy_lock_survives_restart(self):
+        e=self.new_event();ids=[]
+        for title in ['Achieved','Alternative']:
+            ids.append(self.admin.ok(self.e('mission',e),'POST',{'title':title,'kind':'quiz','question':'Q','answer':'A'})['id'])
+        self.admin.ok(self.e('settings',e),'POST',{'entry_gate':'missions'})
+        p=Client();p.ok(self.e('pass',e),'POST',{});p.ok(self.e('mission-answer',e),'POST',{'mission':ids[0],'answer':'A'})
+        self.assertEqual(self.admin.call(self.e('mission-publication',e),'POST',{'id':ids[0],'published':False})[0],409)
+        self.assertTrue(p.ok(self.e('pass',e))['missions'][0]['completed'])
+        app.initialize(seed=False)
+        self.assertTrue(self.detail(e,'mission',ids[0])['locked'])
+        self.assertTrue(p.ok(self.e('pass',e))['missions'][0]['completed'])
+        with app.connect() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM content_history WHERE event=?',(e,)).fetchone()[0],2)
 
 if __name__=='__main__': unittest.main(verbosity=2)

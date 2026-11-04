@@ -1,12 +1,16 @@
 # 행사 운영 플랫폼
 
-여러 축제에 재사용하는 모바일 웹 앱과 부스·운영본부 관리 화면입니다. 기존 클릭형 시안과 달리 Python API와 SQLite에 실제 데이터를 저장합니다. 현재는 로컬 개발·검토용 구현이며, 행사 배포·1만 명 규모 검증 완료 상태가 아닙니다.
+최근 검토: [전체 기능 연결 점검·정리 결과 (2026-11-04)](docs/feature-audit-2026-11-04.md) · [다양한 행사 플랫폼 방향 재정립안](docs/product-direction-2026-11-04.md). 로컬 코드의 수정 상태와 실제 Render 배포 상태는 구분합니다.
+
+여러 행사에 재사용하는 모바일 웹 앱과 부스·운영본부 관리 화면입니다. 기존 클릭형 시안과 달리 Python API와 SQLite에 실제 데이터를 저장합니다. 현재는 로컬 개발·검토용 구현이며, 행사 배포·1만 명 규모 검증 완료 상태가 아닙니다.
 
 [앱 구조와 데이터 활용 도식 PDF](docs/platform-structure.pdf) · [이미지](docs/platform-structure.png) · [편집용 SVG](docs/platform-structure.svg)
 
 [사용자 구조·운영 목적 상세 한 장 요약 PDF](docs/platform-one-page.pdf) · [편집용 HTML](docs/platform-one-page.html)
 
-[홈 회차·상단 이름·샘플 문구 수정, 영어 전체 UI·행사 콘텐츠 번역, 날씨 활성화 안내](docs/display-language-weather.md)
+[앱 이름·행사 문구 편집, 영어 화면·사진 언어 안내, 날씨 활성화 안내](docs/display-language-weather.md)
+
+[퀴즈 9종·설문형 미션·진행 방식·코드/랜덤 팀 사용 안내](docs/mission-quiz-guide.md)
 
 ## 무료 테스트 배포
 

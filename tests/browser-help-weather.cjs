@@ -13,7 +13,7 @@ async function freePort(){return new Promise(resolve=>{const s=net.createServer(
   let ready=false;for(let i=0;i<100;i++){try{if((await fetch(base+'/api/status')).ok){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,100))}assert(ready);
   async function call(route,body,token){const r=await fetch(base+route,{method:body?'POST':'GET',headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});assert.equal(r.status,200,await r.clone().text());return r.json()}
   const owner=await call('/api/setup',{email:'tour@example.test',name:'Tour operator',password:'tour-owner-password-2026'}),ep='/api/events/youth-expo/';
-  await call(ep+'settings',{weather:{enabled:true,locations:[{name:'행사장','nx':60,'ny':127},{name:'야외','nx':61,'ny':127}]},survey_gate:'all',entry_gate:'all',reporting_enabled:true},owner.token);
+  await call(ep+'settings',{weather:{enabled:true,locations:[{name:'행사장','nx':60,'ny':127},{name:'야외','nx':61,'ny':127}]},survey_gate:'all',entry_gate:'all',reporting_enabled:true,safety_phone:'02-000-0000'},owner.token);
   await call(ep+'survey-config',{title:'Tour survey',questions:[{id:'opinion',label:'테스트 의견',type:'text',required:false}],published:true,consent:'Fictional browser test only.'},owner.token);
   const draft=await call('/api/events',{name:'Private draft'},owner.token);
   await call('/api/events/'+draft.id+'/settings',{weather:{enabled:true,locations:[{name:'비공개 행사장','nx':60,'ny':127}]}},owner.token);
