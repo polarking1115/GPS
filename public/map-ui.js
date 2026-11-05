@@ -3,6 +3,9 @@ window.MapUI=(()=>{
  const FM=()=>window.FestivalMap;
  let viewer=null,editor=null,edit=null,watch=null,fence=null,eventId=null,currentRoute=null,gpsMessage='',pendingCorner=null,pendingNode=null,selectedNode=null;
  const defaultMap=()=>({center:[34.7523,127.7468],zoom:17,basemap:'osm'});
+ function storageNotice(){const mode=S.admin.storage?.mode;if(mode==='ephemeral')return `<div class="notice" role="status"><strong>현재 저장공간은 임시 보관입니다.</strong><p>저장한 행사 정보·지도·이미지는 서버 재시작이나 배포 때 초기화될 수 있습니다. 계속 보관하려면 운영 서버에 영구 저장소를 연결해야 합니다.</p></div>`;if(mode==='persistent')return note('행사 정보와 업로드 이미지를 영구 저장소에 보관하고 있습니다.');return ''}
+ function settingsCard(){return `<div class="card"><h3>행사장 지도</h3><p>야외 지도·배치도·보행로와 실내 평면도·부스 위치를 수정합니다.</p>${button('지도 관리 열기','admin-nav:maps','primary')}</div>`}
+ function adminPage(){const s=S.admin.event.settings,maps=s.building_maps||[];return `<h1>지도 관리</h1>${storageNotice()}<div class="grid2"><section class="card"><h2>야외 지도·배치도</h2><p>지도의 시작 위치, 배치도 이미지, 보행 지점과 통로를 수정합니다. 실내 자동 전환에 사용할 건물 입구와 범위도 지정할 수 있습니다.</p><p class="muted">보행 지점 ${(s.outdoor_nodes||[]).length}개 · 통로 ${(s.outdoor_edges||[]).length}개</p>${button('야외 지도·배치도·보행로 편집','outdoor-editor','primary')}</section><section class="card"><h2>실내 평면도·부스 배치</h2><p>건물별 평면도를 등록하거나 교체하고, 이미지 위에서 부스 위치를 지정합니다.</p>${button('실내 평면도 등록·교체','map-editor','primary')}</section></div><h2>등록된 실내 평면도</h2><div class="grid2">${maps.map(m=>`<article class="card"><h3>${esc(m.name)}</h3><img src="${esc(m.image)}" alt="${esc(m.name)} 평면도" style="width:100%;height:200px;object-fit:contain"><p>${button('부스 위치 배치','place-map:'+encodeURIComponent(m.name))}</p></article>`).join('')||note('등록된 평면도가 없습니다. 실내 평면도 등록·교체에서 건물명과 이미지를 입력하세요.')}</div>`}
  function theme(){return S.mode==='admin'?S.admin.event.settings:S.data.theme}
  function mapState(){return {...defaultMap(),...(theme().outdoor_map||{})}}
  function statusText(){return watch!==null?(gpsMessage||'GPS 수신 대기 · 위치는 기기 안에서만 사용합니다.'):'GPS는 꺼져 있습니다. 직접 출발지를 선택할 수도 있습니다.'}
@@ -78,5 +81,5 @@ window.MapUI=(()=>{
  document.addEventListener('input',e=>{if(!edit||!edit.config.overlay)return;if(['overlay-opacity','overlay-rotation'].includes(e.target.id)){const opacity=Number($('#overlay-opacity').value),rotation=Number($('#overlay-rotation').value);if(!Number.isFinite(rotation)||Math.abs(rotation)>180)return;edit.config.overlay.opacity=opacity;edit.config.overlay.rotation=rotation;editor.setOverlay(edit.config.overlay,true,c=>{edit.config.overlay=c})}});
  window.addEventListener('pagehide',()=>stopGPS(false));
  document.addEventListener('visibilitychange',()=>{if(document.hidden)fence?.signalLost()});
- return {controls,outdoor,mount,unmount,route,manual,action,close:destroyEditor,stopGPS};
+  return {controls,outdoor,mount,unmount,route,manual,action,close:destroyEditor,stopGPS,adminPage,settingsCard,storageNotice};
 })();

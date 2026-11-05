@@ -25,6 +25,7 @@ window.HelpUI=(()=>{
   'participant:safety':['안전·날씨','날씨의 관측 시각과 공식 특보를 확인하고 안전시설·신고 메뉴를 이용합니다. 급박한 위험은 112·119에 전화하세요.','Safety and weather','Check observation times, official warnings and safety facilities. Call 112 or 119 for immediate danger.'],
   'participant:report':['안전 신고','현장 위치와 필요한 상황을 적고 제출합니다. 안내 중에는 신고를 전송하지 않습니다. 급박한 위험은 긴급 전화로 도움을 요청하세요.','Safety report','Describe the location and essential facts. The tour does not send a report. Call emergency services for immediate danger.'],
   'admin:dashboard':['현장 운영 대시보드','행사장 날씨, 부스·존 참여, 문의와 업무 알림을 확인합니다. 인증 집계는 현재 체류 인원과 다릅니다.','Operations dashboard','Review venue weather, check-in counts, inquiries and staff notices. Check-in counts do not show current occupancy.'],
+  'admin:maps':['지도 관리','야외 지도·배치도·보행로를 편집하거나 실내 평면도를 등록하고 부스 위치를 배치합니다. 변경 후 저장 버튼으로 적용하세요.','Map management','Edit outdoor maps and walking paths, or upload indoor plans and place booths. Save to apply your changes.'],
   'admin:booths':['공간·부스 관리','존을 구성하고 부스를 검토·수정합니다. 지도에 위치를 배치하고 부스별 QR과 관리 접근을 설정합니다.','Zones and booths','Set up zones, review booths, place them on maps and manage QR codes and staff access.'],
   'admin:content':['공지·프로그램','참가자 공지와 프로그램을 등록하고 공개 영어 번역을 검토합니다.','Notices and programs','Publish participant notices and programs, and review English translations.'],
   'admin:missions':['미션·전체 설문','미션을 개설하고 전체 설문을 구성합니다. 설문 원문 붙여넣기와 표준 문항을 사용할 수 있습니다.','Missions and survey','Create missions and the event survey using pasted questions or standard templates.'],
