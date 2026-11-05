@@ -66,6 +66,12 @@ def secret_box(): return Fernet((DATA / 'encryption.key').read_bytes())
 def encrypt(v): return secret_box().encrypt(v.encode()).decode() if v else ''
 def decrypt(v): return secret_box().decrypt(v.encode()).decode() if v else ''
 def phone_hash(v): return hmac.new((DATA/'encryption.key').read_bytes(),v.encode(),hashlib.sha256).hexdigest()
+
+def storage_mode():
+    mount = Path(os.environ.get('FESTIVAL_DISK_PATH', '/var/data')).resolve()
+    if mount.is_mount() and DATA.is_relative_to(mount): return 'persistent'
+    return 'ephemeral' if os.environ.get('RENDER') or os.environ.get('FESTIVAL_TEST_DEPLOYMENT')=='1' else 'local'
+
 def normalize_phone(v):
     v = re.sub(r'[\s().-]', '', str(v))
     if v.startswith('+82'): v = '0' + v[3:]
@@ -90,7 +96,10 @@ class ApiError(Exception):
 
 
 def initialize(seed=True):
+    if os.environ.get('FESTIVAL_REQUIRE_PERSISTENT_DISK')=='1' and storage_mode()!='persistent':
+        raise RuntimeError('영구 디스크가 연결되지 않았거나 FESTIVAL_DATA가 디스크 경로 밖입니다. 임시 저장소로 시작하지 않습니다.')
     DATA.mkdir(parents=True, exist_ok=True); DATA.chmod(0o700)
+    (DATA / 'uploads').mkdir(exist_ok=True)
     key = DATA / 'encryption.key'
     if not key.exists():
         fd=os.open(key,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
@@ -473,6 +482,9 @@ class Handler(BaseHTTPRequestHandler):
             if method!='GET': raise ApiError(405,'지원하지 않는 요청입니다.')
             if path in ['/','/manage','/booth','/register','/invite'] or path.startswith('/e/') or path.startswith('/b/') or path.startswith('/bm/'):
                 file=ROOT/'public/index.html'
+            elif re.fullmatch(r'/assets/[\w-]+\.(png|jpg|jpeg|webp|mp3|wav|ogg|mp4|webm)',path) and (DATA/'uploads'/path.rsplit('/',1)[-1]).is_file():
+                file=(DATA/'uploads'/path.rsplit('/',1)[-1]).resolve()
+                if not file.is_relative_to(DATA/'uploads'): raise ApiError(404,'파일을 찾을 수 없습니다.')
             else:
                 file=(ROOT/'public'/path.lstrip('/')).resolve()
                 if not file.is_relative_to(ROOT/'public') or not file.is_file(): raise ApiError(404,'파일을 찾을 수 없습니다.')
@@ -862,6 +874,7 @@ class Handler(BaseHTTPRequestHandler):
             for kind,key in [('program','programs'),('notice','notices'),('zone','zones')]:
                 for item in payload[key]: item.update(content_meta(db,e,kind,item['id']))
             payload['readiness']=publication_readiness(db,ev)
+            payload['storage']={'mode':storage_mode()}
             return payload
         if route=='integrations/grid' and method=='POST':
             need('owner')
@@ -973,7 +986,7 @@ class Handler(BaseHTTPRequestHandler):
             if not content or len(content)>4*1024*1024: raise ApiError(400,'문제 자료는 4MB 이하여야 합니다.')
             valid=(mime=='audio/mpeg' and (content.startswith(b'ID3') or len(content)>1 and content[0]==255 and content[1]&224==224)) or (mime=='audio/wav' and content.startswith(b'RIFF') and content[8:12]==b'WAVE') or (mime=='audio/ogg' and content.startswith(b'OggS')) or (mime=='video/mp4' and content[4:8]==b'ftyp') or (mime=='video/webm' and content.startswith(b'\x1aE\xdf\xa3'))
             if not valid: raise ApiError(400,'파일 내용과 형식이 일치하지 않습니다.')
-            name=uid()+extensions[mime];(ROOT/'public/assets'/name).write_bytes(content);audit(db,e,actor,'quiz.media.upload',name);return {'url':'/assets/'+name}
+            name=uid()+extensions[mime];(DATA/'uploads'/name).write_bytes(content);audit(db,e,actor,'quiz.media.upload',name);return {'url':'/assets/'+name}
         if route=='upload' and method=='POST':
             need('owner','content');mime=d.get('mime')
             if mime not in ['image/png','image/jpeg','image/webp']: raise ApiError(400,'PNG·JPEG·WebP 이미지만 지원합니다.')
@@ -983,7 +996,7 @@ class Handler(BaseHTTPRequestHandler):
             valid=(mime=='image/png' and content.startswith(b'\x89PNG\r\n\x1a\n')) or (mime=='image/jpeg' and content.startswith(b'\xff\xd8\xff')) or (mime=='image/webp' and content.startswith(b'RIFF') and content[8:12]==b'WEBP')
             if not valid: raise ApiError(400,'이미지 형식을 확인하세요.')
             # These are public event artwork assets; never upload private documents here.
-            folder=ROOT/'public/assets';name=uid()+{'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[mime]
+            folder=DATA/'uploads';name=uid()+{'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[mime]
             (folder/name).write_bytes(content);audit(db,e,actor,'image.upload',name);return {'url':'/assets/'+name}
         if route=='zone' and method=='POST':
             need('owner','content');old=content_item(db,e,'zone',d['id']) if d.get('id') else None

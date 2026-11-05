@@ -42,7 +42,8 @@ def main():
     except ConfigurationError as error:
         print(str(error), file=sys.stderr, flush=True)
         return 1
-    print('Disposable test deployment: data may reset; use fictional information only.', flush=True)
+    print('Persistent test deployment: database and uploads use the mounted disk.' if app.storage_mode()=='persistent'
+          else 'Disposable test deployment: data may reset; use fictional information only.', flush=True)
     app.main()
     return 0
 
