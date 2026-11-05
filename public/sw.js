@@ -1,5 +1,5 @@
 /* Public information only. Participant/admin APIs, contact and report data are never cached. */
-const CACHE='festival-public-v12';
+const CACHE='festival-public-v13';
 const SHELL=['/','/styles.css','/app.js','/i18n.js','/map-tools.js','/map-ui.js','/service-ui.js','/help-ui.js','/theme-ui.js','/content-ui.js','/quiz-ui.js','/vendor/leaflet/leaflet.js','/vendor/leaflet/leaflet.css','/assets/youth-hero.png','/assets/favicon.svg','/assets/language-ko.png','/assets/language-en.png','/assets/language-browser.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(names=>Promise.all(names.filter(n=>n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});

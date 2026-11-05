@@ -10,11 +10,12 @@ window.ThemeUI=(()=>{
  function hero(event,theme={},preview={}){
   const c=config(theme),background=preview.background||(asset(theme.hero)?theme.hero:''),poster=preview.poster||c.poster||background;
   if(c.layout==='poster'&&!poster)c.layout='split';
-  const style=`--kv-text:${c.text_color};--kv-surface:${c.surface_color};--kv-title:${c.title_size}px;--kv-align:${c.align};--kv-items:${{left:'flex-start',center:'center',right:'flex-end'}[c.align]};--kv-x:${c.position_x}%;--kv-y:${c.position_y}%;--kv-zoom:${c.zoom/100};--kv-fit:${c.fit};--kv-filter:${c.overlay_opacity/100}`;
+  const protection=readability(c.text_color);
+  const style=`--kv-readable-bg:${protection.background};--kv-text:${c.text_color};--kv-surface:${c.surface_color};--kv-title:${c.title_size}px;--kv-align:${c.align};--kv-items:${{left:'flex-start',center:'center',right:'flex-end'}[c.align]};--kv-x:${c.position_x}%;--kv-y:${c.position_y}%;--kv-zoom:${c.zoom/100};--kv-fit:${c.fit};--kv-filter:${c.overlay_opacity/100}`;
   const edition=c.layout==='background'&&String(event.name||'').match(/^((?:제)?[0-9]+회|[0-9]+(?:st|nd|rd|th))\s+/);
-  const titleText=edition?`<span class="kv-edition">${esc(edition[0])}</span><span>${esc(event.name.slice(edition[0].length))}</span>`:esc(event.name);
+  const titleText=edition?`<span class="kv-edition"><span class="kv-readable">${esc(edition[0])}</span></span><span class="kv-title-text">${esc(event.name.slice(edition[0].length))}</span>`:`<span class="kv-title-text">${esc(event.name)}</span>`;
   const title=`<h1${c.show_title?'':' class="kv-sr-only"'}>${titleText}</h1>`;
-  const copy=`<div class="kv-copy">${title}${c.show_slogan&&event.description?`<p class="kv-slogan">${esc(event.description)}</p>`:''}<p class="kv-meta">${esc(event.start)}${event.end&&event.end!==event.start?' — '+esc(event.end):''}<br>${esc(event.venue)}</p></div>`;
+  const copy=`<div class="kv-copy"><div class="kv-copy-content">${title}${c.show_slogan&&event.description?`<p class="kv-slogan">${esc(event.description)}</p>`:''}<p class="kv-meta"><span class="kv-meta-text">${esc(event.start)}${event.end&&event.end!==event.start?' — '+esc(event.end):''}<br>${esc(event.venue)}</span></p></div></div>`;
   const media=background?`<div class="kv-media"><img class="kv-art" src="${esc(background)}" alt=""${preview.enabled?'':' fetchpriority="high"'}><div class="kv-filter kv-filter-${c.overlay_tone}"></div></div>`:'';
   const posterLink=!preview.enabled&&c.poster?`<div class="kv-poster-link">${button(t('행사 포스터 보기'),'visual-poster','text-btn')}</div>`:'';
   return `<section class="hero kv-hero kv-${c.layout}" style="${style}">${c.layout==='poster'?`<h1 class="kv-sr-only">${esc(event.name)}</h1><div class="kv-poster-media"><img class="kv-poster-image" src="${esc(poster)}" alt="${esc(event.name)} ${esc(t('행사 포스터'))}"></div>`:c.layout==='split'?copy+media:media+copy}${posterLink}</section>`;
@@ -32,11 +33,22 @@ window.ThemeUI=(()=>{
  function read(form){const c={...draft.config};for(const key of Object.keys(c)){const input=form.elements.namedItem(key);if(!input)continue;c[key]=['show_title','show_slogan'].includes(key)?input.checked:key in limits?Number(input.value):input.value}return c}
  const lum=hex=>{const parts=hex.slice(1).match(/../g).map(x=>parseInt(x,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return parts[0]*.2126+parts[1]*.7152+parts[2]*.0722};
  const contrast=(a,b)=>{const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
+ // Composite against the worst image pixel: white under a dark backing,
+ // black under a light backing. This remains readable without blur support.
+ function readability(color){
+  const dark=contrast(color,'#000000')>=contrast(color,'#ffffff'),channel=dark?0:255;
+  let opacity=.64;
+  for(;opacity<1;opacity=Math.min(1,Math.round((opacity+.01)*100)/100)){
+   const worst=(dark?Math.ceil(255*(1-opacity)):Math.floor(255*opacity)).toString(16).padStart(2,'0');
+   if(contrast(color,'#'+worst.repeat(3))>=4.5)break;
+  }
+  return {background:`rgba(${channel},${channel},${channel},${opacity})`};
+ }
  function sizePreview(){const stage=$('#kv-preview-stage'),viewport=$('#kv-preview-viewport');if(!draft||!stage||!viewport)return;const width=draft.device==='mobile'?390:1100,scale=Math.min(1,viewport.clientWidth/width);stage.style.width=width+'px';stage.style.left=Math.max(0,(viewport.clientWidth-width*scale)/2)+'px';stage.style.transform=`scale(${scale})`;viewport.style.height=Math.ceil(stage.scrollHeight*scale)+'px'}
  function update(){const form=$('form[data-form="key-visual"]');if(!draft||!form)return;draft.config=read(form);draft.primary=form.elements.primary.value;draft.accent=form.elements.accent.value;const c=draft.config;
   for(const key of Object.keys(limits)){const out=form.querySelector(`[data-visual-output="${key}"]`);if(out)out.textContent=c[key]+(key==='title_size'?'px':'%')}
   $('#kv-poster-note').textContent=c.layout==='poster'?'포스터형: 이미지 속 문구를 사용하고 앱 행사명·슬로건·날짜를 겹쳐 표시하지 않습니다.':'행사명·슬로건은 앱 글자로 표시합니다. 이미지 속 문구는 원본에 그대로 남습니다.';
-  const ratio=contrast(c.text_color,c.surface_color);$('#kv-contrast').textContent=`선택한 글자·바탕색 대비 ${ratio.toFixed(1)}:1${ratio<4.5?' · 가독성이 낮습니다. 글자색 추천 또는 색상 변경을 권장합니다.':' · 단색 영역의 일반 글자 권장 대비 충족'}${c.layout==='background'?' · 이미지 위에서는 필터와 실제 미리보기를 함께 확인하세요.':''}`;
+  const ratio=contrast(c.text_color,c.surface_color);$('#kv-contrast').textContent=c.layout==='background'?'배경형은 글자색에 맞춰 글자 뒤 바탕의 밝기와 농도를 자동 조절합니다. 배경 이미지를 바꿔도 안내를 읽기 쉽게 유지합니다.':`선택한 글자·바탕색 대비 ${ratio.toFixed(1)}:1${ratio<4.5?' · 가독성이 낮습니다. 글자색 추천 또는 색상 변경을 권장합니다.':' · 단색 영역의 일반 글자 권장 대비 충족'}`;
   const stage=$('#kv-preview-stage'),theme={...S.admin.event.settings,primary:draft.primary,accent:draft.accent,hero:draft.hero,key_visual:c};stage.dataset.device=draft.device;stage.style.setProperty('--blue',draft.primary);stage.style.setProperty('--cyan',draft.accent);
   stage.innerHTML=`<div class="app-wrap"><aside class="intro"><div class="wordmark">PEOPLE · PLACE · EXPERIENCE</div><h1>${esc(t("새로운 경험을 만나고,"))}<br><em>${esc(t("함께 만드는 내일."))}</em></h1><p>부스를 둘러보고, 미션을 완성해 보세요.</p></aside><section class="device"><header class="app-header"><strong>${esc(APP_NAME)}</strong><small>한국어 / EN</small></header><main class="page home">${hero(S.admin.event,theme,{enabled:true,background:draft.backgroundURL,poster:draft.posterURL})}<div class="kv-preview-links"><span>${esc(t("지도·부스 찾기"))}</span>${theme.features?.missions!==false?`<span>${esc(t('미션 보기'))}</span>`:''}</div>${theme.features?.programs!==false?`<div class="section-head"><h3>${esc(t('오늘의 프로그램'))}</h3></div><div class="card">행사 안내와 프로그램 내용이 표시됩니다.</div>`:''}<div class="kv-preview-nav">${navItems.filter(([key])=>theme.features?.[key]!==false).map(([,label])=>esc(label)).join('　')}</div></main></section></div>`;
   for(const b of form.querySelectorAll('[data-action^="visual-device:"]')){const active=b.dataset.action.endsWith(draft.device);b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active))}
